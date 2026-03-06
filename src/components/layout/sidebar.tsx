@@ -17,21 +17,28 @@ import {
   CalendarDays,
   Smartphone,
   BarChart3,
+  FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/jobs', label: 'Jobs', icon: Truck },
-  { href: '/calendar', label: 'Calendar', icon: CalendarDays },
-  { href: '/inventory', label: 'Inventory', icon: Package },
-  { href: '/toner', label: 'Toner', icon: Printer },
-  { href: '/billing', label: 'Billing', icon: Receipt },
-  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { href: '/driver', label: 'Driver View', icon: Smartphone },
-  { href: '/settings', label: 'Settings', icon: Settings2 },
+  { href: '/dashboard',  label: 'Dashboard',        icon: LayoutDashboard, group: 'main' },
+  { href: '/jobs',       label: 'Jobs',              icon: Truck,           group: 'main' },
+  { href: '/calendar',   label: 'Calendar',          icon: CalendarDays,    group: 'main' },
+  { href: '/driver',     label: '📱 Driver View',    icon: Smartphone,      group: 'main' },
+  { href: '/inventory',  label: 'Inventory / SOH',   icon: Package,         group: 'ops'  },
+  { href: '/toner',      label: 'Toner Orders',      icon: Printer,         group: 'ops'  },
+  { href: '/billing',    label: 'Billing',           icon: Receipt,         group: 'ops'  },
+  { href: '/analytics',  label: '📊 Analytics',      icon: BarChart3,       group: 'ops'  },
+  { href: '/settings',   label: 'Settings',          icon: Settings2,       group: 'sys'  },
 ]
+
+const groupLabels: Record<string, string> = {
+  main: 'Operations',
+  ops:  'Finance & Stock',
+  sys:  'System',
+}
 
 function NavLink({
   href,
@@ -82,17 +89,29 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.href}
-            href={item.href}
-            label={item.label}
-            icon={item.icon}
-            active={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))}
-            onClick={() => setMobileOpen(false)}
-          />
-        ))}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        {(['main', 'ops', 'sys'] as const).map((group) => {
+          const items = navItems.filter((i) => i.group === group)
+          return (
+            <div key={group} className="mb-4">
+              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+                {groupLabels[group]}
+              </p>
+              <div className="space-y-0.5">
+                {items.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                    active={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))}
+                    onClick={() => setMobileOpen(false)}
+                  />
+                ))}
+              </div>
+            </div>
+          )
+        })}
       </nav>
 
       {/* Bottom sign out */}
