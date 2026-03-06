@@ -8,7 +8,7 @@
 
 Both Xero and Microsoft 365 use OAuth tokens that expire:
 - **Xero:** Access token expires every 30 minutes. Refresh token expires in 60 days (must be used at least once per 60 days or requires full re-auth).
-- **Azure/M365:** Access token expires in 1 hour. Refresh token lifespan is configurable (default 90 days, can be set to never expire for service accounts).
+- **Azure/M365:** Access token expires in 1 hour. No refresh token for Application permissions — use client credentials flow (Client ID + Secret → token directly, no user needed). Token auto-refreshes on expiry.
 
 If refresh isn't handled: automation silently breaks. Invoices stop going out. Emails stop being ingested. Nobody notices until a client calls.
 
