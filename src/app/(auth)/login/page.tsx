@@ -1,4 +1,4 @@
-import { Truck } from 'lucide-react'
+import Image from 'next/image'
 import { Toaster } from 'sonner'
 import LoginForm from './login-form'
 
@@ -10,12 +10,9 @@ export default function LoginPage() {
         <div className="bg-[#1e2130] rounded-2xl shadow-xl border border-[#2a2d3e] p-8">
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
-            <div className="w-14 h-14 bg-orange-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-orange-500/20">
-              <Truck className="w-7 h-7 text-white" strokeWidth={2} />
+            <div className="mb-4 flex items-center justify-center">
+              <Image src="/logo.png" alt="Honor Logistics" width={200} height={60} className="object-contain" priority />
             </div>
-            <h1 className="text-xl font-bold text-[#f1f5f9] text-center">
-              Honor Removals &amp; Logistics
-            </h1>
             <p className="text-sm text-[#94a3b8] mt-1 text-center">
               Sign in to your workspace
             </p>

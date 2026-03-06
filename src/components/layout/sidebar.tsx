@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import {
@@ -72,14 +73,8 @@ export function Sidebar() {
   const sidebarContent = (
     <div className="w-60 h-screen flex flex-col bg-slate-900">
       {/* Logo area */}
-      <div className="px-4 py-5 border-b border-slate-800 flex items-center gap-3">
-        <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center shrink-0">
-          <Truck className="w-4 h-4 text-white" strokeWidth={2.5} />
-        </div>
-        <div className="min-w-0">
-          <p className="text-white font-bold text-sm leading-tight">Honor</p>
-          <p className="text-slate-400 text-xs leading-tight truncate">Removals &amp; Logistics</p>
-        </div>
+      <div className="px-4 py-5 border-b border-slate-800 flex items-center">
+        <Image src="/logo.png" alt="Honor Logistics" width={160} height={48} className="object-contain" priority />
       </div>
 
       {/* Nav */}
