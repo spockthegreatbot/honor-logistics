@@ -153,12 +153,12 @@ export async function POST(req: NextRequest) {
     let reply = await askGPT(cleanText, ctx, senderName)
 
     // Check for ACTION block and execute
-    const actionMatch = reply.match(/ACTION:(\{.*?\})/s)
+    const actionMatch = reply.match(/ACTION:(\{[\s\S]*?\})/)
     if (actionMatch) {
       try {
         const actionParams = JSON.parse(actionMatch[1])
         const actionResult = await handleAction(actionParams.action, actionParams)
-        reply = reply.replace(/ACTION:\{.*?\}/s, '').trim()
+        reply = reply.replace(/ACTION:\{[\s\S]*?\}/, '').trim()
         if (actionResult) reply = (reply ? reply + '\n\n' : '') + actionResult
       } catch { /* ignore parse errors */ }
     }
