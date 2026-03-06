@@ -29,13 +29,13 @@ export default async function SettingsPage() {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-        <p className="text-sm text-slate-500 mt-1">Manage pricing, clients, staff, and data imports.</p>
+        <h1 className="text-2xl font-bold text-[#f1f5f9]">Settings</h1>
+        <p className="text-sm text-[#94a3b8] mt-1">Manage pricing, clients, staff, and data imports.</p>
       </div>
 
       {/* ── Pricing Rules ───────────────────────────────────────── */}
       <Card>
-        <CardHeader className="border-b border-slate-100">
+        <CardHeader className="border-b border-[#2a2d3e]">
           <CardTitle>Pricing Rules — FY2025-26</CardTitle>
           <CardDescription>
             Fuel surcharge is hardcoded at 11% on all applicable jobs (not configurable here).
@@ -59,20 +59,20 @@ export default async function SettingsPage() {
                 {(pricingRules ?? []).map((rule) => (
                   <TableRow key={String(rule.id)}>
                     <TableCell>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 capitalize">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-[#f1f5f9] capitalize">
                         {String(rule.job_type ?? '—')}
                       </span>
                     </TableCell>
-                    <TableCell className="font-medium text-slate-900 text-sm">
+                    <TableCell className="font-medium text-[#f1f5f9] text-sm">
                       {String(rule.line_item_name ?? '—')}
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell text-slate-500 text-xs">
+                    <TableCell className="hidden sm:table-cell text-[#94a3b8] text-xs">
                       {rule.machine_type ? String(rule.machine_type) : '—'}
                     </TableCell>
-                    <TableCell className="text-right font-semibold text-slate-900">
+                    <TableCell className="text-right font-semibold text-[#f1f5f9]">
                       {formatCurrency(rule.unit_price as number)}
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell text-slate-500 text-xs">
+                    <TableCell className="hidden sm:table-cell text-[#94a3b8] text-xs">
                       {String(rule.unit ?? '—')}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
@@ -92,7 +92,7 @@ export default async function SettingsPage() {
 
       {/* ── Clients ─────────────────────────────────────────────── */}
       <Card>
-        <CardHeader className="border-b border-slate-100">
+        <CardHeader className="border-b border-[#2a2d3e]">
           <CardTitle>Billing Clients</CardTitle>
           <CardDescription>Each client can have independent open billing cycles simultaneously.</CardDescription>
         </CardHeader>
@@ -112,18 +112,18 @@ export default async function SettingsPage() {
                 {(clients ?? []).map((client) => (
                   <TableRow key={String(client.id)}>
                     <TableCell>
-                      <p className="font-semibold text-slate-900 text-sm">{String(client.name ?? '—')}</p>
+                      <p className="font-semibold text-[#f1f5f9] text-sm">{String(client.name ?? '—')}</p>
                       {client.trading_name && client.trading_name !== client.name && (
-                        <p className="text-xs text-slate-500">{String(client.trading_name)}</p>
+                        <p className="text-xs text-[#94a3b8]">{String(client.trading_name)}</p>
                       )}
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell font-mono text-xs text-slate-600">
+                    <TableCell className="hidden sm:table-cell font-mono text-xs text-[#94a3b8]">
                       {client.abn ? String(client.abn) : '—'}
                     </TableCell>
-                    <TableCell className="hidden sm:table-cell text-slate-600 text-sm">
+                    <TableCell className="hidden sm:table-cell text-[#94a3b8] text-sm">
                       {client.billing_email ? String(client.billing_email) : '—'}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-slate-500 text-sm">
+                    <TableCell className="hidden md:table-cell text-[#94a3b8] text-sm">
                       {client.payment_terms_days != null ? `${client.payment_terms_days} days` : '—'}
                     </TableCell>
                     <TableCell>
@@ -143,7 +143,7 @@ export default async function SettingsPage() {
 
       {/* ── Staff ───────────────────────────────────────────────── */}
       <Card>
-        <CardHeader className="border-b border-slate-100">
+        <CardHeader className="border-b border-[#2a2d3e]">
           <CardTitle>Staff</CardTitle>
           <CardDescription>Active staff members. Auth linked via Supabase Dashboard → Authentication.</CardDescription>
         </CardHeader>
@@ -159,14 +159,14 @@ export default async function SettingsPage() {
             <TableBody>
               {(staff ?? []).map((s) => (
                 <TableRow key={String(s.id)}>
-                  <TableCell className="font-medium text-slate-900">{String(s.name)}</TableCell>
-                  <TableCell className="text-slate-600 text-sm">{String(s.email)}</TableCell>
+                  <TableCell className="font-medium text-[#f1f5f9]">{String(s.name)}</TableCell>
+                  <TableCell className="text-[#94a3b8] text-sm">{String(s.email)}</TableCell>
                   <TableCell>
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
                       s.role === 'admin'     ? 'bg-purple-100 text-purple-700' :
                       s.role === 'manager'   ? 'bg-blue-100 text-blue-700' :
                       s.role === 'driver'    ? 'bg-orange-100 text-orange-700' :
-                                              'bg-slate-100 text-slate-700'
+                                              'bg-slate-100 text-[#f1f5f9]'
                     }`}>
                       {String(s.role)}
                     </span>
