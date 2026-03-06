@@ -254,10 +254,19 @@ export default function InventoryClient({ initialItems, initialMovements, client
           <h1 className="text-2xl font-bold text-[#f1f5f9]">Inventory / SOH</h1>
           <p className="text-sm text-[#94a3b8] mt-0.5">{filteredItems.length} items {showActive ? 'in storage' : 'dispatched'}</p>
         </div>
-        <Button size="sm" onClick={() => setInwardsOpen(true)}>
-          <Plus className="w-4 h-4" />
-          Log Inwards
-        </Button>
+        <div className="flex items-center gap-2">
+          <a
+            href="/api/export/inventory"
+            download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#2a2d3e] text-xs font-medium text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e] transition-colors"
+          >
+            ⬇ Export CSV
+          </a>
+          <Button size="sm" onClick={() => setInwardsOpen(true)}>
+            <Plus className="w-4 h-4" />
+            Log Inwards
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="soh">

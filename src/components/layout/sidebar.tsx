@@ -15,6 +15,8 @@ import {
   Menu,
   X,
   CalendarDays,
+  Smartphone,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -26,6 +28,8 @@ const navItems = [
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/toner', label: 'Toner', icon: Printer },
   { href: '/billing', label: 'Billing', icon: Receipt },
+  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/driver', label: 'Driver View', icon: Smartphone },
   { href: '/settings', label: 'Settings', icon: Settings2 },
 ]
 

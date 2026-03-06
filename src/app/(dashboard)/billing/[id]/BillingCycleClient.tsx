@@ -377,6 +377,13 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                   Xero not connected yet
                 </Button>
               )}
+              <Link
+                href={`/billing/${cycle.id}/preview`}
+                target="_blank"
+                className="mt-2 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-[#2a2d3e] text-xs font-medium text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e] transition-colors"
+              >
+                📄 Preview Invoice
+              </Link>
             </div>
           </Card>
         </div>

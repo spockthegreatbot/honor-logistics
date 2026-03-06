@@ -100,6 +100,13 @@ export function JobsClient({ initialJobs, count }: Props) {
               List
             </button>
           </div>
+          <a
+            href="/api/export/jobs"
+            download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#2a2d3e] text-xs font-medium text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e] transition-colors"
+          >
+            ⬇ Export CSV
+          </a>
           <Button size="sm" onClick={() => setShowNewJob(true)}>
             <Plus className="w-4 h-4" />
             New Job

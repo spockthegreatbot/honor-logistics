@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { sendTelegramAlert } from '@/lib/telegram'
 
 export async function POST(request: Request) {
   try {
@@ -67,6 +68,21 @@ export async function POST(request: Request) {
         console.error('Runup details creation error:', runupError)
         // Don't fail the whole request — job was created
       }
+    }
+
+    // Send Telegram alert for new job
+    if (job) {
+      const { data: details } = await supabase
+        .from('jobs')
+        .select('end_customers(name), staff:assigned_to(name)')
+        .eq('id', job.id)
+        .single()
+      const d = details as unknown as { end_customers?: { name: string } | null; staff?: { name: string } | null } | null
+      const custName = d?.end_customers?.name ?? 'N/A'
+      const staffName = d?.staff?.name ?? 'Unassigned'
+      sendTelegramAlert(
+        `🆕 *New Job: ${jobNumber}*\nType: ${job_type}\nCustomer: ${custName}\nScheduled: ${scheduled_date || 'TBD'}\nAssigned: ${staffName}`
+      )
     }
 
     return NextResponse.json({ job }, { status: 201 })

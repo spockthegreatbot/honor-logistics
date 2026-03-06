@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { sendTelegramAlert } from '@/lib/telegram'
+
+const statusEmoji: Record<string, string> = {
+  pending: '📋', new: '📋', runup_pending: '🔧', runup_complete: '✅',
+  ready: '📋', dispatched: '🚚', in_transit: '🚚', complete: '✅',
+  completed: '✅', invoiced: '✅', cancelled: '❌',
+}
 
 export async function PATCH(
   request: Request,
@@ -19,6 +26,16 @@ export async function PATCH(
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Send Telegram alert on status change
+    if (body.status && job) {
+      const emoji = statusEmoji[body.status] ?? '📋'
+      const custName = (job as { end_customers?: { name: string } | null }).end_customers?.name ?? 'N/A'
+      const jobNum = (job as { job_number?: string | null }).job_number ?? id
+      sendTelegramAlert(
+        `${emoji} *Job ${body.status.replace(/_/g, ' ')}: ${jobNum}*\nCustomer: ${custName}`
+      )
     }
 
     return NextResponse.json({ job })
