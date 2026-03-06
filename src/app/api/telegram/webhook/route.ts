@@ -47,8 +47,8 @@ function stripBotMention(text: string): string {
 
 async function getContext() {
   const today = new Date().toISOString().split('T')[0]
-  // Next 7 days
-  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  // Next 14 days
+  const twoWeeks = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
   const [
     { data: todayJobs },
@@ -56,38 +56,53 @@ async function getContext() {
     { data: pendingRunups },
     { data: inventoryRows },
     { data: openCycles },
+    { data: recentJobs },
   ] = await Promise.all([
+    // Today's jobs
     supabase
       .from('jobs')
-      .select('job_number, job_type, status, scheduled_date, end_customers(name), staff(name)')
+      .select('job_number, job_type, status, scheduled_date, notes, end_customers(name), staff(name)')
       .eq('scheduled_date', today)
       .neq('status', 'cancelled')
       .order('scheduled_date'),
+    // Upcoming jobs next 14 days (all types including collections/deliveries)
     supabase
       .from('jobs')
-      .select('job_number, job_type, status, scheduled_date, end_customers(name), staff(name)')
+      .select('job_number, job_type, status, scheduled_date, notes, end_customers(name), staff(name)')
       .gt('scheduled_date', today)
-      .lte('scheduled_date', nextWeek)
+      .lte('scheduled_date', twoWeeks)
       .neq('status', 'cancelled')
       .order('scheduled_date')
-      .limit(20),
+      .limit(30),
+    // Pending run-ups
     supabase
       .from('jobs')
-      .select('job_number, end_customers(name), serial_number, staff(name)')
+      .select('job_number, end_customers(name), serial_number, staff(name), scheduled_date')
       .eq('status', 'runup_pending')
       .limit(20),
+    // Inventory count
     supabase
       .from('inventory')
       .select('id', { count: 'exact', head: true })
       .eq('is_active', true),
+    // Open billing cycles
     supabase
       .from('billing_cycles')
       .select('cycle_name, period_end, grand_total, clients(name)')
       .eq('status', 'open')
       .limit(5),
+    // Recent completed/dispatched jobs (last 7 days)
+    supabase
+      .from('jobs')
+      .select('job_number, job_type, status, scheduled_date, end_customers(name)')
+      .gte('scheduled_date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+      .lt('scheduled_date', today)
+      .in('status', ['completed', 'dispatched'])
+      .order('scheduled_date', { ascending: false })
+      .limit(10),
   ])
 
-  return { todayJobs, upcomingJobs, pendingRunups, inventoryRows, openCycles }
+  return { todayJobs, upcomingJobs, pendingRunups, inventoryRows, openCycles, recentJobs }
 }
 
 async function handleAction(action: string, params: Record<string, string>) {
@@ -120,8 +135,8 @@ Today is ${today} (Sydney time).
 **Today's Jobs (${ctx.todayJobs?.length ?? 0}):**
 ${ctx.todayJobs?.length ? JSON.stringify(ctx.todayJobs, null, 1) : 'None scheduled today'}
 
-**Upcoming Jobs this week (${ctx.upcomingJobs?.length ?? 0}):**
-${ctx.upcomingJobs?.length ? JSON.stringify(ctx.upcomingJobs, null, 1) : 'Nothing scheduled this week'}
+**Upcoming Jobs next 14 days (${ctx.upcomingJobs?.length ?? 0}) — includes ALL types (delivery, collection, run-up, install):**
+${ctx.upcomingJobs?.length ? JSON.stringify(ctx.upcomingJobs, null, 1) : 'Nothing scheduled in next 14 days'}
 
 **Pending Run-Ups (${ctx.pendingRunups?.length ?? 0} — need sign-off before dispatch):**
 ${ctx.pendingRunups?.length ? JSON.stringify(ctx.pendingRunups, null, 1) : 'None pending'}
@@ -130,6 +145,9 @@ ${ctx.pendingRunups?.length ? JSON.stringify(ctx.pendingRunups, null, 1) : 'None
 
 **Open Billing Cycles:**
 ${ctx.openCycles?.length ? JSON.stringify(ctx.openCycles, null, 1) : 'None open'}
+
+**Recently Completed/Dispatched (last 7 days):**
+${ctx.recentJobs?.length ? JSON.stringify(ctx.recentJobs, null, 1) : 'None'}
 
 ## Your Personality
 - Direct, practical, Australian tone
