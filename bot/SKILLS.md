@@ -25,3 +25,17 @@
 - Editing pricing rules
 - Xero invoice management (coming after Xero integration)
 - Photo upload via Telegram
+
+## Backlog (confirmed by Tolga — 2026-03-06)
+
+### Job Costing Calculator
+- When creating a job, auto-calculate the billable amount based on job type + pricing rules
+- Staff see cost estimate before dispatch
+- No more manual Excel math
+
+### Staff Daily Briefing (7am Sydney)
+- Every morning at 7am AEDT, bot posts to Honor Logistics Telegram group
+- Format: "Good morning team ☀️ — X jobs today: [list with customer + type]"
+- Any pending run-ups that need sign-off
+- Removes morning phone calls between Onur and staff
+- Implement as: VPS cron at 7am Sydney (UTC+11) → POST to Honor Bot → Telegram group
