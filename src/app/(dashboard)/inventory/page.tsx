@@ -14,10 +14,10 @@ import {
 import { formatDate, cn } from '@/lib/utils'
 
 const conditionStyles: Record<string, string> = {
-  new: 'bg-green-100 text-green-700',
-  refurb: 'bg-blue-100 text-blue-700',
-  faulty: 'bg-red-100 text-red-700',
-  for_disposal: 'bg-slate-100 text-slate-600',
+  new:          'bg-green-500/15 text-green-400 border border-green-500/30',
+  refurb:       'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+  faulty:       'bg-red-500/15 text-red-400 border border-red-500/30',
+  for_disposal: 'bg-[#2a2d3e] text-[#94a3b8]',
 }
 
 const conditionLabels: Record<string, string> = {
@@ -41,9 +41,9 @@ export default async function InventoryPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
+          <h1 className="text-2xl font-bold text-[#f1f5f9]">Inventory</h1>
           {count != null && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#2a2d3e] text-[#94a3b8]">
               {count}
             </span>
           )}
@@ -66,7 +66,6 @@ export default async function InventoryPage() {
                 <TableHead>Brand</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Condition</TableHead>
-                <TableHead>Client Ref</TableHead>
                 <TableHead>Inwards Date</TableHead>
               </TableRow>
             </TableHeader>
@@ -75,7 +74,7 @@ export default async function InventoryPage() {
                 const condition = String(item.condition ?? '')
                 return (
                   <TableRow key={String(item.id)}>
-                    <TableCell className="font-medium text-slate-900 max-w-xs">
+                    <TableCell className="font-medium text-[#f1f5f9] max-w-xs">
                       <div className="truncate">
                         {String(
                           (item.machines as Record<string, unknown> | null)?.name
@@ -84,30 +83,27 @@ export default async function InventoryPage() {
                         )}
                       </div>
                       {(item.machines as Record<string, unknown> | null)?.model != null && (
-                        <div className="text-xs text-slate-400 truncate">
+                        <div className="text-xs text-[#94a3b8] truncate">
                           {String((item.machines as Record<string, unknown>).model)}
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-slate-600">
+                    <TableCell className="font-mono text-xs text-[#94a3b8]">
                       {String(item.serial_number ?? '—')}
                     </TableCell>
-                    <TableCell>{String(item.brand ?? '—')}</TableCell>
-                    <TableCell>{String(item.location ?? '—')}</TableCell>
+                    <TableCell className="text-[#94a3b8]">{String(item.brand ?? '—')}</TableCell>
+                    <TableCell className="text-[#94a3b8]">{String(item.location ?? '—')}</TableCell>
                     <TableCell>
                       <span
                         className={cn(
                           'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                          conditionStyles[condition] ?? 'bg-slate-100 text-slate-600'
+                          conditionStyles[condition] ?? 'bg-[#2a2d3e] text-[#94a3b8]'
                         )}
                       >
                         {conditionLabels[condition] ?? condition}
                       </span>
                     </TableCell>
-                    <TableCell className="text-slate-500">
-                      {String(item.client_ref ?? '—')}
-                    </TableCell>
-                    <TableCell>{formatDate(item.inwards_date as string | null)}</TableCell>
+                    <TableCell className="text-[#94a3b8]">{formatDate(item.inwards_date as string | null)}</TableCell>
                   </TableRow>
                 )
               })}
@@ -115,10 +111,10 @@ export default async function InventoryPage() {
           </Table>
         ) : (
           <div className="py-16 flex flex-col items-center text-center gap-3">
-            <Package className="w-12 h-12 text-slate-300" strokeWidth={1.5} />
+            <Package className="w-12 h-12 text-[#2a2d3e]" strokeWidth={1.5} />
             <div>
-              <p className="font-semibold text-slate-700">No inventory items</p>
-              <p className="text-sm text-slate-400 mt-0.5">
+              <p className="font-semibold text-[#f1f5f9]">No inventory items</p>
+              <p className="text-sm text-[#94a3b8] mt-0.5">
                 Items logged inwards will appear here.
               </p>
             </div>

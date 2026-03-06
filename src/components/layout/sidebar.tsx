@@ -13,6 +13,7 @@ import {
   LogOut,
   Menu,
   X,
+  CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -20,6 +21,7 @@ import { createClient } from '@/lib/supabase/client'
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/jobs', label: 'Jobs', icon: Truck },
+  { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/inventory', label: 'Inventory', icon: Package },
   { href: '/toner', label: 'Toner', icon: Printer },
   { href: '/billing', label: 'Billing', icon: Receipt },

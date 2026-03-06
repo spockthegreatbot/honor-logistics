@@ -1,26 +1,31 @@
 @import "tailwindcss";
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
-  --primary: 24.6 95% 53.1%;
-  --primary-foreground: 60 9.1% 97.8%;
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 24.6 95% 53.1%;
+  /* Dark theme — always dark */
+  --background: 225 21% 7%;        /* #0f1117 near black */
+  --foreground: 210 40% 96%;       /* #f1f5f9 near white */
+  --card: 229 23% 15%;             /* #1e2130 card bg */
+  --card-foreground: 210 40% 96%;  /* #f1f5f9 */
+  --popover: 229 23% 15%;          /* #1e2130 */
+  --popover-foreground: 210 40% 96%;
+  --primary: 24.6 95% 53.1%;       /* #f97316 orange */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 228 20% 13%;        /* #1a1d27 dark navy */
+  --secondary-foreground: 210 40% 96%;
+  --muted: 228 20% 13%;            /* #1a1d27 */
+  --muted-foreground: 215 19% 65%; /* #94a3b8 */
+  --accent: 229 23% 15%;           /* #1e2130 */
+  --accent-foreground: 210 40% 96%;
+  --destructive: 0 84% 60%;        /* #ef4444 */
+  --destructive-foreground: 210 40% 96%;
+  --border: 231 19% 20%;           /* #2a2d3e */
+  --input: 228 20% 13%;            /* #1a1d27 */
+  --ring: 24.6 95% 53.1%;          /* #f97316 */
   --radius: 0.5rem;
+  /* Success / Warning / Error */
+  --success: 142 71% 45%;          /* #22c55e */
+  --warning: 48 96% 54%;           /* #eab308 */
+  --error: 0 84% 60%;              /* #ef4444 */
 }
 
 @theme inline {
@@ -49,4 +54,32 @@ body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: var(--font-geist-sans, system-ui, sans-serif);
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f1117;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2d3e;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3e55;
+}
+
+/* Kanban column scroll */
+.kanban-column {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2d3e #0f1117;
+}
+
+/* Select / dropdown dark */
+select option {
+  background: #1e2130;
+  color: #f1f5f9;
 }

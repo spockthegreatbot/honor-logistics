@@ -29,17 +29,17 @@ export function formatDate(date: string | null | undefined): string {
 
 export function jobStatusColor(status: string): string {
   const map: Record<string, string> = {
-    new: 'bg-blue-100 text-blue-700 border border-blue-200',
-    runup_pending: 'bg-amber-100 text-amber-700 border border-amber-200',
-    runup_complete: 'bg-sky-100 text-sky-700 border border-sky-200',
-    ready: 'bg-cyan-100 text-cyan-700 border border-cyan-200',
-    dispatched: 'bg-orange-100 text-orange-700 border border-orange-200',
-    in_transit: 'bg-violet-100 text-violet-700 border border-violet-200',
-    complete: 'bg-green-100 text-green-700 border border-green-200',
-    invoiced: 'bg-purple-100 text-purple-700 border border-purple-200',
-    cancelled: 'bg-red-100 text-red-700 border border-red-200',
+    new:           'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+    runup_pending: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+    runup_complete:'bg-sky-500/15 text-sky-400 border border-sky-500/30',
+    ready:         'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30',
+    dispatched:    'bg-orange-500/15 text-orange-400 border border-orange-500/30',
+    in_transit:    'bg-violet-500/15 text-violet-400 border border-violet-500/30',
+    complete:      'bg-green-500/15 text-green-400 border border-green-500/30',
+    invoiced:      'bg-purple-500/15 text-purple-400 border border-purple-500/30',
+    cancelled:     'bg-red-500/15 text-red-400 border border-red-500/30',
   }
-  return map[status] ?? 'bg-slate-100 text-slate-600 border border-slate-200'
+  return map[status] ?? 'bg-[#2a2d3e] text-[#94a3b8] border border-[#363a52]'
 }
 
 export function jobStatusLabel(status: string): string {

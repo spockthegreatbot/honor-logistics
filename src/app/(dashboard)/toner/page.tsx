@@ -14,17 +14,17 @@ import {
 import { formatDate, formatCurrency, cn } from '@/lib/utils'
 
 const tonerStatusStyles: Record<string, string> = {
-  pending: 'bg-slate-100 text-slate-600',
-  packed: 'bg-blue-100 text-blue-700',
-  dispatched: 'bg-orange-100 text-orange-700',
-  delivered: 'bg-green-100 text-green-700',
+  pending:    'bg-[#2a2d3e] text-[#94a3b8]',
+  packed:     'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+  dispatched: 'bg-orange-500/15 text-orange-400 border border-orange-500/30',
+  delivered:  'bg-green-500/15 text-green-400 border border-green-500/30',
 }
 
 const tonerStatusLabels: Record<string, string> = {
-  pending: 'Pending',
-  packed: 'Packed',
+  pending:    'Pending',
+  packed:     'Packed',
   dispatched: 'Dispatched',
-  delivered: 'Delivered',
+  delivered:  'Delivered',
 }
 
 export default async function TonerPage() {
@@ -39,7 +39,7 @@ export default async function TonerPage() {
     <div className="p-6 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-slate-900">Toner Orders</h1>
+        <h1 className="text-2xl font-bold text-[#f1f5f9]">Toner Orders</h1>
         <Button size="sm" asChild>
           <Link href="/toner/new">
             <Plus className="w-4 h-4" />
@@ -68,30 +68,30 @@ export default async function TonerPage() {
                 const status = String(order.status ?? 'pending')
                 return (
                   <TableRow key={String(order.id)}>
-                    <TableCell className="font-mono font-semibold text-orange-600">
-                      {String(order.ni_number ?? '—')}
+                    <TableCell className="font-mono font-semibold text-orange-400">
+                      {String(order.efex_ni ?? order.ni_number ?? '—')}
                     </TableCell>
-                    <TableCell>{String(order.courier ?? '—')}</TableCell>
-                    <TableCell className="font-mono text-xs text-slate-600">
+                    <TableCell className="text-[#94a3b8]">{String(order.courier ?? '—')}</TableCell>
+                    <TableCell className="font-mono text-xs text-[#94a3b8]">
                       {String(order.tracking_number ?? '—')}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-[#94a3b8]">
                       {order.weight_kg != null ? `${order.weight_kg} kg` : '—'}
                     </TableCell>
-                    <TableCell>{formatDate(order.dispatch_date as string | null)}</TableCell>
-                    <TableCell>{formatDate(order.estimated_delivery as string | null)}</TableCell>
+                    <TableCell className="text-[#94a3b8]">{formatDate(order.dispatch_date as string | null)}</TableCell>
+                    <TableCell className="text-[#94a3b8]">{formatDate(order.est_delivery as string | null)}</TableCell>
                     <TableCell>
                       <span
                         className={cn(
                           'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                          tonerStatusStyles[status] ?? 'bg-slate-100 text-slate-600'
+                          tonerStatusStyles[status] ?? 'bg-[#2a2d3e] text-[#94a3b8]'
                         )}
                       >
                         {tonerStatusLabels[status] ?? status}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatCurrency(order.total_amount as number | null)}
+                    <TableCell className="text-right font-medium text-[#f1f5f9]">
+                      {formatCurrency(order.total_price as number | null)}
                     </TableCell>
                   </TableRow>
                 )
@@ -100,10 +100,10 @@ export default async function TonerPage() {
           </Table>
         ) : (
           <div className="py-16 flex flex-col items-center text-center gap-3">
-            <Printer className="w-12 h-12 text-slate-300" strokeWidth={1.5} />
+            <Printer className="w-12 h-12 text-[#2a2d3e]" strokeWidth={1.5} />
             <div>
-              <p className="font-semibold text-slate-700">No toner orders</p>
-              <p className="text-sm text-slate-400 mt-0.5">
+              <p className="font-semibold text-[#f1f5f9]">No toner orders</p>
+              <p className="text-sm text-[#94a3b8] mt-0.5">
                 Toner orders will appear here once created.
               </p>
             </div>
