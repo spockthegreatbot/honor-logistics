@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { X, Clock, CheckCircle2, AlertCircle, ChevronRight, Loader2 } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -55,6 +56,7 @@ interface Props {
 }
 
 export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
+  const router = useRouter()
   const [job, setJob] = useState<Job | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -95,6 +97,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         const { job: updated } = await res.json()
         setJob(updated)
         onJobUpdated?.(updated)
+        router.refresh()
       }
     } finally {
       setSaving(false)

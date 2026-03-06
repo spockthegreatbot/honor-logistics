@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +27,7 @@ const JOB_TYPES = [
 ]
 
 export function NewJobSlideOver({ onClose, onCreated }: Props) {
+  const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
   const [endCustomers, setEndCustomers] = useState<EndCustomer[]>([])
   const [staff, setStaff] = useState<Staff[]>([])
@@ -94,6 +96,7 @@ export function NewJobSlideOver({ onClose, onCreated }: Props) {
         setError(data.error ?? 'Failed to create job')
       } else {
         onCreated?.(data.job as never)
+        router.refresh()
         onClose()
       }
     } catch {
