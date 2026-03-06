@@ -118,6 +118,8 @@ CREATE TABLE install_details (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Fuel surcharge is hardcoded at 11% in business logic (FUEL_SURCHARGE_RATE = 0.11).
+-- fuel_override allows Fixed Price / Price Match exceptions — set reason in fuel_override_reason.
 CREATE TABLE delivery_details (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
@@ -125,11 +127,11 @@ CREATE TABLE delivery_details (
   from_address TEXT,
   to_address TEXT,
   base_price DECIMAL(10,2),
-  fuel_surcharge_pct DECIMAL(5,2) DEFAULT 11.00,
+  -- fuel_surcharge_pct is NOT stored — always calculated at 11% unless fuel_override = true
   fuel_override BOOL DEFAULT false,
   fuel_override_reason VARCHAR,
-  fuel_surcharge_amt DECIMAL(10,2),
-  total_price DECIMAL(10,2),
+  fuel_surcharge_amt DECIMAL(10,2), -- computed: base_price * 0.11 (unless override)
+  total_price DECIMAL(10,2),        -- computed: base_price + fuel_surcharge_amt
   driver_id UUID REFERENCES staff(id),
   vehicle VARCHAR,
   delivery_notes TEXT,

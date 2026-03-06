@@ -1,3 +1,4 @@
+-- ── Clients ──────────────────────────────────────────────────────────────────
 INSERT INTO clients (name, trading_name, abn, billing_email, payment_terms_days, is_primary)
 VALUES ('EFEX', 'EFEX', '28 625 658 568', 'accounts@efex.com.au', 30, true);
 
@@ -6,6 +7,14 @@ INSERT INTO clients (name, is_primary) VALUES
   ('A E Dunne', false),
   ('Disability Trust', false),
   ('Various/Other', false);
+
+-- ── Staff ─────────────────────────────────────────────────────────────────────
+-- Passwords/auth set via Supabase Dashboard → Authentication; auth_user_id linked post-setup.
+INSERT INTO staff (name, email, role, is_active) VALUES
+  ('Onur Yelkarasi',  'onur@honorlogistics.com.au',   'admin',     true),
+  ('Andre Dukino',    'andre@honorlogistics.com.au',   'warehouse', true),
+  ('Ugur Nalcakan',   'ugur@honorlogistics.com.au',    'driver',    true),
+  ('Banu Yelkarasi',  'banu@honorlogistics.com.au',    'admin',     true);
 
 INSERT INTO pricing_rules (financial_year, job_type, machine_type, line_item_name, unit_price, unit, fuel_applicable) VALUES
 ('2025-2026','runup','A4_SFP','Machine Run-Up A4 SFP',77.00,'per_job',false),
