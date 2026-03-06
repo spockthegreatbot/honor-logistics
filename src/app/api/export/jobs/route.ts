@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/require-auth'
 
 function escapeCsv(val: string | null | undefined): string {
   if (val == null) return ''
@@ -10,6 +12,9 @@ function escapeCsv(val: string | null | undefined): string {
 }
 
 export async function GET() {
+  const user = await requireAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const supabase = await createClient()
 
   const { data: jobs } = await supabase

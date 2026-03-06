@@ -56,7 +56,12 @@ export function NewJobSlideOver({ onClose, onCreated }: Props) {
         ])
         if (clientsRes.ok) setClients(await clientsRes.json())
         if (staffRes.ok) setStaff(await staffRes.json())
-      } catch {}
+        if (!clientsRes.ok || !staffRes.ok) {
+          setError('Failed to load form data. Please close and reopen.')
+        }
+      } catch {
+        setError('Network error loading form data. Please close and reopen.')
+      }
       setLoadingMeta(false)
     }
     loadMeta()

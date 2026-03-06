@@ -41,6 +41,7 @@ export default function DriverClient({ initialJobs, today }: Props) {
   const router = useRouter()
   const [jobs, setJobs] = useState<Job[]>(initialJobs)
   const [updating, setUpdating] = useState<string | null>(null)
+  const [updateError, setUpdateError] = useState<string | null>(null)
 
   const dateStr = new Date(today + 'T00:00:00').toLocaleDateString('en-AU', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -48,6 +49,7 @@ export default function DriverClient({ initialJobs, today }: Props) {
 
   async function updateStatus(id: string, status: string) {
     setUpdating(id)
+    setUpdateError(null)
     try {
       const res = await fetch(`/api/jobs/${id}`, {
         method: 'PATCH',
@@ -57,7 +59,12 @@ export default function DriverClient({ initialJobs, today }: Props) {
       if (res.ok) {
         const { job } = await res.json()
         setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, status: job.status } : j)))
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setUpdateError(data.error ?? 'Failed to update status. Try again.')
       }
+    } catch {
+      setUpdateError('Network error. Check your connection and try again.')
     } finally {
       setUpdating(null)
     }
@@ -83,6 +90,12 @@ export default function DriverClient({ initialJobs, today }: Props) {
           🔄 Refresh
         </button>
       </div>
+
+      {updateError && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-400">
+          {updateError}
+        </div>
+      )}
 
       {/* Job cards */}
       {jobs.length === 0 ? (

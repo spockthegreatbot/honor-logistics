@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/require-auth'
 
 interface RouteContext {
   params: Promise<{ id: string }>
 }
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
+  const user = await requireAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { id } = await params
   const supabase = await createClient()
 

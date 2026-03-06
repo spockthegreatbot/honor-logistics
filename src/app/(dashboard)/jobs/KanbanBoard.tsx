@@ -130,6 +130,7 @@ interface Props {
 
 export function KanbanBoard({ initialJobs, onJobClick }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs)
+  const [dragError, setDragError] = useState<string | null>(null)
 
   // Group jobs by status
   const byStatus = COLUMNS.reduce<Record<string, Job[]>>((acc, col) => {
@@ -143,6 +144,7 @@ export function KanbanBoard({ initialJobs, onJobClick }: Props) {
     if (destination.droppableId === source.droppableId) return
 
     const newStatus = destination.droppableId as JobStatus
+    setDragError(null)
 
     // Optimistic update
     setJobs((prev) =>
@@ -151,22 +153,35 @@ export function KanbanBoard({ initialJobs, onJobClick }: Props) {
 
     // Persist to DB
     try {
-      await fetch(`/api/jobs/${draggableId}`, {
+      const res = await fetch(`/api/jobs/${draggableId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       })
+      if (!res.ok) {
+        // Revert and show error
+        setJobs((prev) =>
+          prev.map((j) => (j.id === draggableId ? { ...j, status: source.droppableId } : j))
+        )
+        setDragError('Failed to update job status. Change reverted.')
+      }
     } catch (e) {
       console.error('Failed to update job status:', e)
-      // Revert
+      // Revert and show error
       setJobs((prev) =>
         prev.map((j) => (j.id === draggableId ? { ...j, status: source.droppableId } : j))
       )
+      setDragError('Network error — job status change reverted.')
     }
   }
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
+      {dragError && (
+        <div className="mb-3 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-400">
+          {dragError}
+        </div>
+      )}
       <div className="flex gap-3 overflow-x-auto pb-4 min-h-[calc(100vh-220px)]">
         {COLUMNS.map((col) => {
           const colJobs = byStatus[col.id] ?? []

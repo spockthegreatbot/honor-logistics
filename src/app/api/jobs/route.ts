@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendTelegramAlert } from '@/lib/telegram'
+import { requireAuth } from '@/lib/require-auth'
 
 export async function POST(request: Request) {
+  const user = await requireAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
     const supabase = await createClient()
     const body = await request.json()

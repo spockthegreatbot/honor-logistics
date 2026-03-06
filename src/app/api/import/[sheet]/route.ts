@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/require-auth'
 
 const VALID_SHEETS = ['runup', 'delivery', 'install', 'inwards', 'toner', 'storage', 'soh'] as const
 type SheetType = typeof VALID_SHEETS[number]
@@ -11,9 +12,9 @@ interface RouteContext {
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim())
   if (lines.length < 2) return []
-  
+
   const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\s'"]/g, '_').replace(/[^a-z0-9_]/g, ''))
-  
+
   return lines.slice(1).map(line => {
     // Handle quoted fields
     const values: string[] = []
@@ -30,7 +31,7 @@ function parseCSV(text: string): Record<string, string>[] {
       }
     }
     values.push(current.trim())
-    
+
     const row: Record<string, string> = {}
     headers.forEach((h, i) => { row[h] = values[i] ?? '' })
     return row
@@ -62,6 +63,9 @@ function isEmpty(val: string): boolean {
 }
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
+  const user = await requireAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { sheet } = await params
 
   if (!VALID_SHEETS.includes(sheet as SheetType)) {
@@ -87,7 +91,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   const text = await blob.text()
   const rows = parseCSV(text)
-  
+
   if (rows.length === 0) {
     return NextResponse.json({ error: 'No data rows found in CSV.' }, { status: 400 })
   }
@@ -97,6 +101,24 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   let imported = 0
   let skipped = 0
   const errors: { row: number; reason: string }[] = []
+
+  // H1: Pre-load lookup tables to avoid N+1 queries
+  let endCustomerMap = new Map<string, string>()
+  let clientMap = new Map<string, string>()
+
+  if (['runup', 'delivery', 'install', 'soh'].includes(sheet)) {
+    const { data: allEndCustomers } = await supabase.from('end_customers').select('id, name')
+    for (const ec of allEndCustomers ?? []) {
+      endCustomerMap.set(ec.name.toLowerCase(), ec.id)
+    }
+  }
+
+  if (sheet === 'soh') {
+    const { data: allClients } = await supabase.from('clients').select('id, name')
+    for (const c of allClients ?? []) {
+      clientMap.set(c.name.toLowerCase(), c.id)
+    }
+  }
 
   if (sheet === 'runup') {
     // week, date, fy, customer, model, serial, action_type, qty, price_ex, comments
@@ -109,17 +131,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       if (!priceEx || priceEx === 0) { skipped++; continue }
 
       try {
-        // Look up or create end_customer
-        let endCustomerId: string | null = null
-        if (customer) {
-          const { data: ec } = await supabase
-            .from('end_customers')
-            .select('id')
-            .ilike('name', customer)
-            .limit(1)
-            .single()
-          endCustomerId = ec?.id ?? null
-        }
+        // H1: lookup from pre-loaded map — no per-row query
+        const endCustomerId = customer ? endCustomerMap.get(customer.toLowerCase()) ?? null : null
 
         const jobNum = `IMP-RU-${Date.now()}-${i}`
         const { data: job, error: jobErr } = await supabase
@@ -138,7 +151,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
         if (jobErr) { errors.push({ row: i + 2, reason: jobErr.message }); continue }
 
-        await supabase.from('runup_details').insert({
+        // H5: check child insert before incrementing counter
+        const { error: runupErr } = await supabase.from('runup_details').insert({
           job_id: job.id,
           action_type: row['action_type'] || null,
           unit_price: priceEx,
@@ -149,6 +163,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           check_test_print: false,
           check_signed_off: false,
         })
+
+        if (runupErr) { errors.push({ row: i + 2, reason: runupErr.message }); continue }
 
         imported++
       } catch (e) {
@@ -172,11 +188,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         const validSubtypes = ['delivery', 'collection', 'recycling', 'swap']
         const normalizedSubtype = validSubtypes.includes(subtype) ? subtype : 'delivery'
 
-        let endCustomerId: string | null = null
-        if (customer) {
-          const { data: ec } = await supabase.from('end_customers').select('id').ilike('name', customer).limit(1).single()
-          endCustomerId = ec?.id ?? null
-        }
+        // H1: lookup from pre-loaded map
+        const endCustomerId = customer ? endCustomerMap.get(customer.toLowerCase()) ?? null : null
 
         const jobNum = `IMP-DL-${Date.now()}-${i}`
         const { data: job, error: jobErr } = await supabase
@@ -198,7 +211,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         const totalIncFuel = parseNum(row['total_inc_fuel'] || '')
         const fuelAmt = totalIncFuel && priceEx ? totalIncFuel - priceEx : null
 
-        await supabase.from('delivery_details').insert({
+        // H5: check child insert before incrementing counter
+        const { error: deliveryErr } = await supabase.from('delivery_details').insert({
           job_id: job.id,
           subtype: normalizedSubtype as 'delivery' | 'collection' | 'recycling' | 'swap',
           base_price: priceEx,
@@ -207,6 +221,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           fuel_override: false,
           total_price: totalIncFuel || priceEx,
         })
+
+        if (deliveryErr) { errors.push({ row: i + 2, reason: deliveryErr.message }); continue }
 
         imported++
       } catch (e) {
@@ -225,11 +241,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       if (isEmpty(customer)) { skipped++; continue }
 
       try {
-        let endCustomerId: string | null = null
-        if (customer) {
-          const { data: ec } = await supabase.from('end_customers').select('id').ilike('name', customer).limit(1).single()
-          endCustomerId = ec?.id ?? null
-        }
+        // H1: lookup from pre-loaded map
+        const endCustomerId = customer ? endCustomerMap.get(customer.toLowerCase()) ?? null : null
 
         const jobNum = `IMP-IN-${Date.now()}-${i}`
         const { data: job, error: jobErr } = await supabase
@@ -247,12 +260,15 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
         if (jobErr) { errors.push({ row: i + 2, reason: jobErr.message }); continue }
 
-        await supabase.from('install_details').insert({
+        // H5: check child insert before incrementing counter
+        const { error: installErr } = await supabase.from('install_details').insert({
           job_id: job.id,
           install_type: row['action'] || null,
           unit_price: priceEx,
           fma_notes: row['fma_notes'] || null,
         })
+
+        if (installErr) { errors.push({ row: i + 2, reason: installErr.message }); continue }
 
         imported++
       } catch (e) {
@@ -270,7 +286,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       if (!validTypes.includes(movType)) { skipped++; continue }
 
       try {
-        await supabase.from('warehouse_movements').insert({
+        const { error: movErr } = await supabase.from('warehouse_movements').insert({
           movement_type: movType as 'inwards' | 'outwards',
           movement_date: parseDate(row['date'] || ''),
           po_number: row['po_number'] || null,
@@ -281,6 +297,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           unit_price: parseNum(row['cost_ex'] || ''),
           notes: row['notes'] || null,
         })
+        if (movErr) { errors.push({ row: i + 2, reason: movErr.message }); continue }
         imported++
       } catch (e) {
         errors.push({ row: i + 2, reason: String(e) })
@@ -295,23 +312,28 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
       try {
         const jobNum = `IMP-TN-${Date.now()}-${i}`
-        const { data: job } = await supabase
+        const { data: job, error: jobErr } = await supabase
           .from('jobs')
           .insert({ job_number: jobNum, job_type: 'toner_ship', status: 'dispatched', scheduled_date: parseDate(row['date'] || '') })
           .select()
           .single()
 
-        if (job) {
-          await supabase.from('toner_orders').insert({
-            job_id: job.id,
-            courier: row['courier'] || null,
-            efex_ni: row['efex_ni'] || null,
-            tracking_number: row['tracking_number'] || null,
-            dispatch_date: parseDate(row['date'] || ''),
-            total_price: parseNum(row['price_ex'] || row['total_price'] || ''),
-            status: 'delivered',
-          })
-        }
+        // H5: check job creation
+        if (jobErr || !job) { errors.push({ row: i + 2, reason: jobErr?.message ?? 'Job insert failed' }); continue }
+
+        // H5: check toner_orders insert before incrementing
+        const { error: tonerErr } = await supabase.from('toner_orders').insert({
+          job_id: job.id,
+          courier: row['courier'] || null,
+          efex_ni: row['efex_ni'] || null,
+          tracking_number: row['tracking_number'] || null,
+          dispatch_date: parseDate(row['date'] || ''),
+          total_price: parseNum(row['price_ex'] || row['total_price'] || ''),
+          status: 'delivered',
+        })
+
+        if (tonerErr) { errors.push({ row: i + 2, reason: tonerErr.message }); continue }
+
         imported++
       } catch (e) {
         errors.push({ row: i + 2, reason: String(e) })
@@ -327,7 +349,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       if (isEmpty(storageType)) { skipped++; continue }
 
       try {
-        await supabase.from('storage_weekly').insert({
+        const { error: storageErr } = await supabase.from('storage_weekly').insert({
           week_label: row['week'] || null,
           storage_type: storageType,
           qty: parseNum(row['qty'] || '1') || 1,
@@ -335,6 +357,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           total_ex: parseNum(row['total_ex'] || ''),
           auto_populated: true,
         })
+        if (storageErr) { errors.push({ row: i + 2, reason: storageErr.message }); continue }
         imported++
       } catch (e) {
         errors.push({ row: i + 2, reason: String(e) })
@@ -350,15 +373,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       if (isEmpty(description)) { skipped++; continue }
 
       try {
-        // Find client by customer name
-        let clientId: string | null = null
+        // H1: lookup from pre-loaded maps
         const customer = row['customer'] || ''
-        if (customer) {
-          const { data: client } = await supabase.from('clients').select('id').ilike('name', customer).limit(1).single()
-          clientId = client?.id ?? null
-        }
+        const clientId = customer ? clientMap.get(customer.toLowerCase()) ?? null : null
 
-        await supabase.from('inventory').insert({
+        const { error: invErr } = await supabase.from('inventory').insert({
           description: description || null,
           brand: row['brand'] || null,
           product_code: row['product_code'] || null,
@@ -374,6 +393,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           is_active: true,
           quantity: 1,
         })
+        if (invErr) { errors.push({ row: i + 2, reason: invErr.message }); continue }
         imported++
       } catch (e) {
         errors.push({ row: i + 2, reason: String(e) })
@@ -393,6 +413,9 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 }
 
 export async function GET(_request: NextRequest, { params }: RouteContext) {
+  const user = await requireAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { sheet } = await params
   if (!VALID_SHEETS.includes(sheet as SheetType)) {
     return NextResponse.json({ error: `Unknown sheet type "${sheet}"` }, { status: 400 })

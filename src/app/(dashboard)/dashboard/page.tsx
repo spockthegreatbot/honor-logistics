@@ -55,41 +55,54 @@ export default async function DashboardPage() {
 
   const todayStr = new Date().toISOString().split('T')[0]
 
-  const [
-    { count: openJobs },
-    { count: pendingRunups },
-    { count: dispatchedToday },
-    { count: stockOnHand },
-    { data: openCycles },
-    { data: recentJobs },
-  ] = await Promise.all([
-    supabase
-      .from('jobs')
-      .select('*', { count: 'exact', head: true })
-      .not('status', 'in', '(complete,invoiced,cancelled)'),
-    supabase
-      .from('jobs')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'runup_pending'),
-    supabase
-      .from('jobs')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'dispatched')
-      .eq('scheduled_date', todayStr),
-    supabase
-      .from('inventory')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_active', true),
-    supabase
-      .from('billing_cycles')
-      .select('grand_total')
-      .eq('status', 'open'),
-    supabase
-      .from('jobs')
-      .select('*, clients(name), end_customers(name), staff:assigned_to(name)')
-      .order('created_at', { ascending: false })
-      .limit(10),
-  ])
+  // H4: Wrap Promise.all in try-catch so a single query failure doesn't crash the dashboard
+  let openJobs: number | null = 0
+  let pendingRunups: number | null = 0
+  let dispatchedToday: number | null = 0
+  let stockOnHand: number | null = 0
+  let openCycles: Array<Record<string, unknown>> | null = []
+  let recentJobs: Array<Record<string, unknown>> | null = []
+  let dashboardError = false
+
+  try {
+    const results = await Promise.all([
+      supabase
+        .from('jobs')
+        .select('*', { count: 'exact', head: true })
+        .not('status', 'in', '(complete,invoiced,cancelled)'),
+      supabase
+        .from('jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'runup_pending'),
+      supabase
+        .from('jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'dispatched')
+        .eq('scheduled_date', todayStr),
+      supabase
+        .from('inventory')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true),
+      supabase
+        .from('billing_cycles')
+        .select('grand_total')
+        .eq('status', 'open'),
+      supabase
+        .from('jobs')
+        .select('*, clients(name), end_customers(name), staff:assigned_to(name)')
+        .order('created_at', { ascending: false })
+        .limit(10),
+    ])
+    openJobs = results[0].count
+    pendingRunups = results[1].count
+    dispatchedToday = results[2].count
+    stockOnHand = results[3].count
+    openCycles = results[4].data as Array<Record<string, unknown>> | null
+    recentJobs = results[5].data as Array<Record<string, unknown>> | null
+  } catch (err) {
+    console.error('Dashboard data fetch error:', err)
+    dashboardError = true
+  }
 
   const openBillingTotal = openCycles?.reduce(
     (sum: number, c: Record<string, unknown>) => sum + ((c.grand_total as number) ?? 0),
@@ -106,6 +119,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {dashboardError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+          Some dashboard data failed to load. Refresh the page to retry.
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -191,7 +210,7 @@ export default async function DashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recentJobs.map((job: Record<string, unknown>) => (
+              {recentJobs.map((job) => (
                 <TableRow key={String(job.id)}>
                   <TableCell>
                     <Link

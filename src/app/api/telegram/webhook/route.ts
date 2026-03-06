@@ -105,9 +105,17 @@ async function getContext() {
   return { todayJobs, upcomingJobs, pendingRunups, inventoryRows, openCycles, recentJobs }
 }
 
-async function handleAction(action: string, params: Record<string, string>) {
+const VALID_JOB_STATUSES = [
+  'pending', 'new', 'runup_pending', 'runup_complete',
+  'ready', 'dispatched', 'completed', 'cancelled', 'complete',
+]
+
+async function handleAction(action: string, params: Record<string, unknown>) {
   if (action === 'update_job_status') {
     const { job_number, status } = params
+    // Validate params are safe strings
+    if (typeof job_number !== 'string' || !job_number.trim()) return '❌ Invalid job number.'
+    if (typeof status !== 'string' || !VALID_JOB_STATUSES.includes(status)) return `❌ Invalid status: ${status}.`
     const { data: job } = await supabase
       .from('jobs')
       .select('id')
@@ -190,6 +198,12 @@ ${ctx.recentJobs?.length ? JSON.stringify(ctx.recentJobs, null, 1) : 'None'}
 }
 
 export async function POST(req: NextRequest) {
+  // C2: Verify Telegram webhook secret token
+  const secret = req.headers.get('x-telegram-bot-api-secret-token')
+  if (secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const body = await req.json()
     const message = body.message || body.edited_message
@@ -246,9 +260,14 @@ export async function POST(req: NextRequest) {
     if (actionMatch) {
       try {
         const actionParams = JSON.parse(actionMatch[1])
-        const actionResult = await handleAction(actionParams.action, actionParams)
-        reply = reply.replace(/ACTION:\{[\s\S]*?\}/, '').trim()
-        if (actionResult) reply = (reply ? reply + '\n\n' : '') + actionResult
+        // H3: Validate action structure before executing
+        if (typeof actionParams === 'object' && actionParams !== null && typeof actionParams.action === 'string') {
+          const actionResult = await handleAction(actionParams.action, actionParams as Record<string, unknown>)
+          reply = reply.replace(/ACTION:\{[\s\S]*?\}/, '').trim()
+          if (actionResult) reply = (reply ? reply + '\n\n' : '') + actionResult
+        } else {
+          reply = reply.replace(/ACTION:\{[\s\S]*?\}/, '').trim()
+        }
       } catch { /* ignore */ }
     }
 
