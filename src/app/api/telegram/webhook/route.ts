@@ -22,10 +22,41 @@ async function sendMessage(chatId: number, text: string, replyToMessageId?: numb
   })
 }
 
+function isBotMentioned(text: string, entities?: Array<{type: string; offset: number; length: number}>): boolean {
+  // Check via entities (most reliable — Telegram provides these)
+  if (entities?.some(e => e.type === 'mention')) {
+    const mentioned = entities
+      .filter(e => e.type === 'mention')
+      .map(e => text.substring(e.offset, e.offset + e.length).toLowerCase())
+    if (mentioned.some(m => m.includes('honorassistant') || m.includes('honor_assistant'))) {
+      return true
+    }
+  }
+  // Fallback: text match (case-insensitive, ignore underscores)
+  const normalised = text.toLowerCase().replace(/_/g, '')
+  return normalised.includes('@honorassistantbot')
+}
+
+function stripBotMention(text: string): string {
+  return text
+    .replace(/@Honor_Assistant_Bot/gi, '')
+    .replace(/@HonorAssistantBot/gi, '')
+    .replace(/@honorassistantbot/gi, '')
+    .trim()
+}
+
 async function getContext() {
   const today = new Date().toISOString().split('T')[0]
+  // Next 7 days
+  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-  const [{ data: todayJobs }, { data: pendingRunups }, { data: soh }, { data: openCycles }] = await Promise.all([
+  const [
+    { data: todayJobs },
+    { data: upcomingJobs },
+    { data: pendingRunups },
+    { data: inventoryRows },
+    { data: openCycles },
+  ] = await Promise.all([
     supabase
       .from('jobs')
       .select('job_number, job_type, status, scheduled_date, end_customers(name), staff(name)')
@@ -34,7 +65,15 @@ async function getContext() {
       .order('scheduled_date'),
     supabase
       .from('jobs')
-      .select('job_number, end_customers(name), machines(model), serial_number, staff(name)')
+      .select('job_number, job_type, status, scheduled_date, end_customers(name), staff(name)')
+      .gt('scheduled_date', today)
+      .lte('scheduled_date', nextWeek)
+      .neq('status', 'cancelled')
+      .order('scheduled_date')
+      .limit(20),
+    supabase
+      .from('jobs')
+      .select('job_number, end_customers(name), serial_number, staff(name)')
       .eq('status', 'runup_pending')
       .limit(20),
     supabase
@@ -43,12 +82,12 @@ async function getContext() {
       .eq('is_active', true),
     supabase
       .from('billing_cycles')
-      .select('cycle_name, period_end, grand_total, client_id, clients(name)')
+      .select('cycle_name, period_end, grand_total, clients(name)')
       .eq('status', 'open')
       .limit(5),
   ])
 
-  return { todayJobs, pendingRunups, soh, openCycles }
+  return { todayJobs, upcomingJobs, pendingRunups, inventoryRows, openCycles }
 }
 
 async function handleAction(action: string, params: Record<string, string>) {
@@ -67,29 +106,49 @@ async function handleAction(action: string, params: Record<string, string>) {
 }
 
 async function askGPT(userMessage: string, ctx: Awaited<ReturnType<typeof getContext>>, senderName: string) {
-  const today = new Date().toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Australia/Sydney' })
+  const now = new Date()
+  const today = now.toLocaleDateString('en-AU', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Australia/Sydney',
+  })
 
-  const systemPrompt = `You are the Honor Logistics assistant bot for Honor Removals & Logistics, a printer delivery and logistics company in Mortdale, NSW.
+  const systemPrompt = `You are Honor Assistant — the operations bot for Honor Removals & Logistics, a printer delivery and logistics company in Mortdale, NSW, Australia.
 
 Today is ${today} (Sydney time).
 
-CURRENT DATA:
-- Jobs today (${ctx.todayJobs?.length ?? 0}): ${JSON.stringify(ctx.todayJobs?.slice(0, 10))}
-- Pending run-ups (${ctx.pendingRunups?.length ?? 0}): ${JSON.stringify(ctx.pendingRunups?.slice(0, 5))}
-- Active inventory units: ${ctx.soh}
-- Open billing cycles: ${JSON.stringify(ctx.openCycles)}
+## Live Data
 
-CAPABILITIES:
-- Answer questions about jobs, stock, deliveries, run-ups, billing
-- Update job status: when asked to mark a job as dispatched/complete/etc, output a JSON action block like: ACTION:{"action":"update_job_status","job_number":"HRL-2026-0001","status":"dispatched"}
-- Give summaries of what's on today, what's pending, what needs attention
+**Today's Jobs (${ctx.todayJobs?.length ?? 0}):**
+${ctx.todayJobs?.length ? JSON.stringify(ctx.todayJobs, null, 1) : 'None scheduled today'}
 
-RULES:
-- Keep replies concise and practical — these are warehouse/driver staff reading on phones
-- Use emojis sparingly but helpfully (✅ ⚠️ 🚚 📦)
-- If you don't have enough data to answer, say so clearly
-- Don't make up job details you don't have
-- The person talking to you is: ${senderName}`
+**Upcoming Jobs this week (${ctx.upcomingJobs?.length ?? 0}):**
+${ctx.upcomingJobs?.length ? JSON.stringify(ctx.upcomingJobs, null, 1) : 'Nothing scheduled this week'}
+
+**Pending Run-Ups (${ctx.pendingRunups?.length ?? 0} — need sign-off before dispatch):**
+${ctx.pendingRunups?.length ? JSON.stringify(ctx.pendingRunups, null, 1) : 'None pending'}
+
+**Active Inventory:** ${ctx.inventoryRows} units in warehouse
+
+**Open Billing Cycles:**
+${ctx.openCycles?.length ? JSON.stringify(ctx.openCycles, null, 1) : 'None open'}
+
+## Your Personality
+- Direct, practical, Australian tone
+- Short answers — staff are on phones in a warehouse
+- Use emojis sparingly: ✅ ⚠️ 🚚 📦 🔧
+- Lead with what matters most, not pleasantries
+- You know the business: run-ups must be signed off before dispatch, EFEX is the primary client, billing cycles are 2 weeks
+
+## What You Can Do
+- Answer questions about jobs, inventory, deliveries, run-ups, billing
+- Show upcoming jobs by day/week
+- Update job status — output: ACTION:{"action":"update_job_status","job_number":"HRL-2026-XXXX","status":"dispatched"}
+- Valid statuses: pending, runup_pending, runup_complete, dispatched, completed, cancelled
+
+## Rules
+- Never make up job details not in the data above
+- If data isn't available, say "I don't have that data — check the app at honor-logistics.vercel.app"
+- Keep replies under 200 words
+- You're talking to: ${senderName}`
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -103,13 +162,13 @@ RULES:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-      max_tokens: 500,
-      temperature: 0.3,
+      max_tokens: 600,
+      temperature: 0.4,
     }),
   })
 
   const data = await response.json()
-  return data.choices?.[0]?.message?.content ?? 'Sorry, I could not process that request.'
+  return data.choices?.[0]?.message?.content ?? 'Sorry, something went wrong. Try again.'
 }
 
 export async function POST(req: NextRequest) {
@@ -123,36 +182,48 @@ export async function POST(req: NextRequest) {
     const messageId: number = message.message_id
     const senderName: string = message.from?.first_name ?? 'Staff'
     const isGroup = message.chat.type !== 'private'
+    const entities = message.entities
 
-    // In groups, only respond when @mentioned or /command used
-    const isMentioned = text.includes(`@${BOT_USERNAME}`)
+    // In groups: respond to @mentions or /commands only
+    const mentioned = isBotMentioned(text, entities)
     const isCommand = text.startsWith('/')
 
-    if (isGroup && !isMentioned && !isCommand) {
+    if (isGroup && !mentioned && !isCommand) {
       return NextResponse.json({ ok: true })
     }
 
-    // Strip bot mention from text
-    const cleanText = text.replace(`@${BOT_USERNAME}`, '').trim()
+    // Strip bot mention
+    const cleanText = stripBotMention(text)
 
-    // Handle /help or empty mention
+    // Handle /help, /start or empty mention
     if (!cleanText || cleanText === '/help' || cleanText === '/start') {
-      await sendMessage(chatId, `👋 *Honor Logistics Assistant*\n\nHere's what I can do:\n\n📋 *Jobs* — "What jobs are on today?"\n🔧 *Run-Ups* — "Any pending run-ups?"\n📦 *Stock* — "How many units in storage?"\n🚚 *Update* — "Mark HRL-0023 as dispatched"\n💰 *Billing* — "What's in the open billing cycle?"\n\nIn the group, just mention me: @${BOT_USERNAME}`, messageId)
+      await sendMessage(
+        chatId,
+        `📦 *Honor Assistant — What I can do:*\n\n` +
+        `📋 "What jobs are on today?"\n` +
+        `📅 "Show upcoming jobs this week"\n` +
+        `🔧 "Any pending run-ups?"\n` +
+        `📦 "How many units in storage?"\n` +
+        `🚚 "Mark HRL-2026-0012 as dispatched"\n` +
+        `💰 "What's in the open billing cycle?"\n\n` +
+        `Just @mention me or reply to any of my messages.`,
+        messageId
+      )
       return NextResponse.json({ ok: true })
     }
 
-    // Send typing indicator
+    // Typing indicator
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendChatAction`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
     })
 
-    // Get context and ask GPT
+    // Get context + ask GPT
     const ctx = await getContext()
     let reply = await askGPT(cleanText, ctx, senderName)
 
-    // Check for ACTION block and execute
+    // Execute ACTION blocks
     const actionMatch = reply.match(/ACTION:(\{[\s\S]*?\})/)
     if (actionMatch) {
       try {
@@ -160,7 +231,7 @@ export async function POST(req: NextRequest) {
         const actionResult = await handleAction(actionParams.action, actionParams)
         reply = reply.replace(/ACTION:\{[\s\S]*?\}/, '').trim()
         if (actionResult) reply = (reply ? reply + '\n\n' : '') + actionResult
-      } catch { /* ignore parse errors */ }
+      } catch { /* ignore */ }
     }
 
     await sendMessage(chatId, reply, messageId)
