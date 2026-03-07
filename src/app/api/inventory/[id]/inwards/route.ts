@@ -16,56 +16,45 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   try {
     const body = await request.json()
-    const { outwards_date, receiver, notes } = body
+    const { inwards_date, sender, notes } = body
 
-    const date = outwards_date || new Date().toISOString().split('T')[0]
+    const date = inwards_date || new Date().toISOString().split('T')[0]
 
-    // Get the inventory item first
     const { data: item, error: fetchError } = await supabase
       .from('inventory')
       .select('serial_number, product_code, pallet_location, quantity')
       .eq('id', id)
       .single()
 
-    if (fetchError || !item) {
-      return NextResponse.json({ error: 'Item not found' }, { status: 404 })
-    }
+    if (fetchError || !item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
 
-    // Update inventory
     const { data, error: updateError } = await supabase
       .from('inventory')
-      .update({
-        outwards_date: date,
-        is_active: false,
-      })
+      .update({ inwards_date: date, is_active: true })
       .eq('id', id)
       .select()
       .single()
 
     if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
-    // Create outwards movement
-    const { error: movError } = await supabase.from('warehouse_movements').insert({
-      movement_type: 'outwards',
+    await supabase.from('warehouse_movements').insert({
+      movement_type: 'inwards',
       serial_number: item.serial_number,
       product_code: item.product_code,
       pallet_location: item.pallet_location,
-      receiver_name: receiver || null,
+      sender_name: sender || null,
       quantity: item.quantity || 1,
       movement_date: date,
       notes: notes || null,
     })
 
-    if (movError) console.error('Movement insert error:', movError)
-
-    // Auto-create delivery job
     const jobNumber = `HRL-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
-    const { data: newJob, error: jobError } = await supabase.from('jobs').insert({
+    const { data: newJob } = await supabase.from('jobs').insert({
       job_number: jobNumber,
-      job_type: 'delivery',
+      job_type: 'collection',
       status: 'new',
       serial_number: item.serial_number,
-      notes: `Auto-created from outwards: ${item.serial_number}${receiver ? ` → ${receiver}` : ''}${notes ? ` | ${notes}` : ''}`,
+      notes: `Auto-created from inwards: ${item.serial_number}${sender ? ` from ${sender}` : ''}${notes ? ` | ${notes}` : ''}`,
       scheduled_date: null,
       machine_id: null,
       client_id: null,
@@ -77,16 +66,14 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       completed_at: null,
     }).select('job_number, id').single()
 
-    if (jobError) console.error('Auto-job creation failed:', jobError)
-
     // Fire-and-forget Telegram alert
     sendTelegramAlert(
-      `📦 *Delivery job created*\nJob: \`${jobNumber}\`\nSerial: ${item.serial_number}${receiver ? `\nTo: ${receiver}` : ''}\nStatus: Unscheduled — assign date in Kanban`
+      `📥 *Collection job created*\nJob: \`${jobNumber}\`\nSerial: ${item.serial_number}${sender ? `\nFrom: ${sender}` : ''}\nStatus: Unscheduled — assign date in Kanban`
     ).catch(console.error)
 
     return NextResponse.json({ data, auto_job: newJob ?? null })
   } catch (err) {
-    console.error(`POST /api/inventory/${id}/outwards error:`, err)
+    console.error(`POST /api/inventory/${id}/inwards error:`, err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

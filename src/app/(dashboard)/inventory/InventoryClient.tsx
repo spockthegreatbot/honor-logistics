@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Package, Search, Filter, ArrowUpDown, X, Truck } from 'lucide-react'
+import { Plus, Package, Search, Filter, ArrowUpDown, X, Truck, PackageCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -117,6 +117,14 @@ export default function InventoryClient({ initialItems, initialMovements, client
   const [inwardsOpen, setInwardsOpen] = useState(false)
   const [outwardsOpen, setOutwardsOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
+
+  // Mark Inwards (for dispatched items coming back)
+  const [markInwardsOpen, setMarkInwardsOpen] = useState(false)
+  const [markInwardsItem, setMarkInwardsItem] = useState<InventoryItem | null>(null)
+  const [markInForm, setMarkInForm] = useState({ inwards_date: new Date().toISOString().split('T')[0], sender: '', notes: '' })
+
+  // Auto-job notification banner
+  const [autoJobMsg, setAutoJobMsg] = useState('')
 
   // Movements filter
   const [movTypeFilter, setMovTypeFilter] = useState('all')
@@ -240,6 +248,33 @@ export default function InventoryClient({ initialItems, initialMovements, client
       if (!res.ok) { setError(json.error || 'Failed to mark outwards'); return }
       setOutwardsOpen(false)
       setSelectedItem(null)
+      if (json.auto_job?.job_number) {
+        setAutoJobMsg(`📦 Delivery job ${json.auto_job.job_number} created — assign date in Kanban`)
+        setTimeout(() => setAutoJobMsg(''), 8000)
+      }
+      startTransition(() => router.refresh())
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleMarkInwards() {
+    if (!markInwardsItem) return
+    setSaving(true); setError('')
+    try {
+      const res = await fetch(`/api/inventory/${markInwardsItem.id}/inwards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(markInForm),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error || 'Failed to mark inwards'); return }
+      setMarkInwardsOpen(false)
+      setMarkInwardsItem(null)
+      if (json.auto_job?.job_number) {
+        setAutoJobMsg(`📥 Collection job ${json.auto_job.job_number} created — assign date in Kanban`)
+        setTimeout(() => setAutoJobMsg(''), 8000)
+      }
       startTransition(() => router.refresh())
     } finally {
       setSaving(false)
@@ -248,6 +283,16 @@ export default function InventoryClient({ initialItems, initialMovements, client
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
+      {/* Auto-job notification banner */}
+      {autoJobMsg && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-300 text-sm font-medium">
+          <span>{autoJobMsg}</span>
+          <button onClick={() => setAutoJobMsg('')} className="text-orange-400 hover:text-orange-200 transition-colors shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
         <div>
@@ -407,13 +452,21 @@ export default function InventoryClient({ initialItems, initialMovements, client
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            {item.is_active && (
+                            {item.is_active ? (
                               <button
                                 onClick={() => { setSelectedItem(item); setOutForm({ outwards_date: new Date().toISOString().split('T')[0], receiver: '', notes: '' }); setOutwardsOpen(true) }}
                                 className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 transition-colors px-2 py-1 rounded border border-orange-500/30 hover:border-orange-400/50"
                               >
                                 <Truck className="w-3 h-3" />
                                 Outwards
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => { setMarkInwardsItem(item); setMarkInForm({ inwards_date: new Date().toISOString().split('T')[0], sender: '', notes: '' }); setMarkInwardsOpen(true) }}
+                                className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors px-2 py-1 rounded border border-green-500/30 hover:border-green-400/50"
+                              >
+                                <PackageCheck className="w-3 h-3" />
+                                Mark Inwards
                               </button>
                             )}
                           </td>
@@ -597,6 +650,41 @@ export default function InventoryClient({ initialItems, initialMovements, client
               <Button variant="outline" onClick={() => setInwardsOpen(false)}>Cancel</Button>
               <Button onClick={handleInwards} disabled={saving || !inForm.description}>
                 {saving ? 'Saving...' : 'Log Inwards'}
+              </Button>
+            </div>
+          </div>
+        </SlideOver>
+      </Dialog>
+
+      {/* Mark Inwards Slide-Over */}
+      <Dialog open={markInwardsOpen} onOpenChange={setMarkInwardsOpen}>
+        <SlideOver width="max-w-md">
+          <div className="flex flex-col h-full">
+            <div className="px-6 py-5 border-b border-[#2a2d3e]">
+              <DialogTitle>Mark Inwards</DialogTitle>
+              <DialogDescription>
+                {markInwardsItem?.description} {markInwardsItem?.serial_number ? `— S/N: ${markInwardsItem.serial_number}` : ''}
+              </DialogDescription>
+            </div>
+            <div className="flex-1 px-6 py-5 space-y-4">
+              {error && <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</p>}
+              <div>
+                <Label>Inwards Date</Label>
+                <Input type="date" value={markInForm.inwards_date} onChange={e => setMarkInForm(f => ({ ...f, inwards_date: e.target.value }))} />
+              </div>
+              <div>
+                <Label>Sender / Source</Label>
+                <Input value={markInForm.sender} onChange={e => setMarkInForm(f => ({ ...f, sender: e.target.value }))} placeholder="Company or person name" />
+              </div>
+              <div>
+                <Label>Notes</Label>
+                <Textarea value={markInForm.notes} onChange={e => setMarkInForm(f => ({ ...f, notes: e.target.value }))} rows={3} />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-[#2a2d3e] flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setMarkInwardsOpen(false)}>Cancel</Button>
+              <Button onClick={handleMarkInwards} disabled={saving} className="bg-green-600 hover:bg-green-500 text-white border-0">
+                {saving ? 'Saving...' : 'Confirm Inwards'}
               </Button>
             </div>
           </div>
