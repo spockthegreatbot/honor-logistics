@@ -44,6 +44,11 @@ export async function POST(request: NextRequest) {
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
+  // 10 MB file size limit
+  if (file.size > 10 * 1024 * 1024) {
+    return NextResponse.json({ error: 'File too large (max 10 MB)' }, { status: 413 })
+  }
+
   const buffer = await file.arrayBuffer()
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: false })
 
@@ -89,6 +94,20 @@ export async function POST(request: NextRequest) {
       ? weekLabels[0]
       : `${weekLabels[0]?.replace('Week ', 'Week ')}-${weekLabels[weekLabels.length - 1]?.replace('Week ', '')}`
     resolvedCycleName = `${weekRange} ${fyLabel}`
+
+    // Check for duplicate billing cycle
+    const { data: existingCycle } = await supabase
+      .from('billing_cycles')
+      .select('id, cycle_name')
+      .eq('client_id', resolvedImportClientId)
+      .eq('period_start', periodStart)
+      .eq('period_end', periodEnd)
+      .maybeSingle()
+    if (existingCycle) {
+      return NextResponse.json({
+        error: `Billing cycle already exists: "${existingCycle.cycle_name}" (${existingCycle.id})`,
+      }, { status: 409 })
+    }
 
     // Create new billing cycle
     const { data: newCycle, error: createErr } = await supabase
@@ -213,25 +232,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No valid rows found in Excel file' }, { status: 400 })
   }
 
-  // Insert jobs in batches of 50
-  const allCreated: { id: string }[] = []
+  // Insert jobs in batches of 50, tracking bulkIndex -> id mapping
+  const createdMap = new Map<number, string>() // bulkIndex -> job id
   for (let i = 0; i < jobsBulk.length; i += 50) {
-    const { data, error } = await supabase.from('jobs').insert(jobsBulk.slice(i, i + 50)).select('id')
+    const batch = jobsBulk.slice(i, i + 50)
+    const { data, error } = await supabase.from('jobs').insert(batch).select('id')
     if (error) { counts.errors++; continue }
-    allCreated.push(...(data ?? []))
+    if (data) {
+      data.forEach((row, batchIdx) => {
+        createdMap.set(i + batchIdx, row.id)
+      })
+    }
   }
 
-  // Build detail arrays
+  // Build detail arrays using bulkIndex mapping
   const rb: Record<string, unknown>[] = [], ib: Record<string, unknown>[] = [], db: Record<string, unknown>[] = [], tb: Record<string, unknown>[] = []
-  for (let i = 0; i < allCreated.length; i++) {
-    if (!(i in jobDetails)) continue
-    const [dtype, ddata] = jobDetails[i]
-    const detail = { ...ddata, job_id: allCreated[i].id }
+  for (const [bulkIndex, [dtype, ddata]] of Object.entries(jobDetails)) {
+    const idx = Number(bulkIndex)
+    const jobId = createdMap.get(idx)
+    if (!jobId) continue
+    const detail = { ...ddata, job_id: jobId }
     if (dtype === 'runup') { rb.push(detail); counts.runup++ }
     else if (dtype === 'install') { ib.push(detail); counts.install++ }
     else if (dtype === 'delivery') {
       db.push(detail)
-      const jtype = jobsBulk[i].job_type
+      const jtype = jobsBulk[idx].job_type
       if (jtype === 'collection') counts.collection++; else counts.delivery++
     }
     else if (dtype === 'toner') { tb.push(detail); counts.toner++ }
@@ -281,6 +306,6 @@ export async function POST(request: NextRequest) {
     cycle_id: resolvedCycleId,
     auto_created_cycle: !formData.get('cycle_id'),
     imported: counts,
-    total_jobs: allCreated.length,
+    total_jobs: createdMap.size,
   })
 }
