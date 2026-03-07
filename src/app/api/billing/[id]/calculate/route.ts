@@ -70,7 +70,10 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
 
   const total_storage = (storageRows ?? []).reduce((sum, r) => sum + Number(r.total_ex || 0), 0)
   const discount_amount = Number(cycle?.discount_amount || 0)
-  const subtotal = total_runup + total_delivery + total_fuel_surcharge + total_install + total_storage + total_toner
+  // NOTE: total_toner is intentionally excluded from subtotal.
+  // Toner order charges are already included inside the Storage + Misc weekly lines.
+  // total_toner is stored for reference only (Toner tab display).
+  const subtotal = total_runup + total_delivery + total_fuel_surcharge + total_install + total_storage
   const gst_amount = (subtotal - discount_amount) * 0.1
   const grand_total = subtotal - discount_amount + gst_amount
 
