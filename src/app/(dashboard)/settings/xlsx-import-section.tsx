@@ -20,6 +20,8 @@ interface Props {
 
 interface ImportResult {
   cycle_name: string
+  cycle_id: string
+  auto_created_cycle: boolean
   total_jobs: number
   imported: {
     runup: number
@@ -52,7 +54,6 @@ export function XlsxImportSection({ billingCycles }: Props) {
 
   async function handleImport() {
     if (!file) { setError('Please select an Excel file'); return }
-    if (!cycleId) { setError('Please select a billing cycle'); return }
 
     setLoading(true)
     setError('')
@@ -94,23 +95,28 @@ export function XlsxImportSection({ billingCycles }: Props) {
       </CardHeader>
 
       <CardContent className="pt-5 space-y-5">
-        {/* Step 1: Select Billing Cycle */}
+        {/* Step 1: Select Billing Cycle (optional) */}
         <div>
           <label className="block text-sm font-medium text-[#94a3b8] mb-2">
-            1. Select billing cycle to import into
+            1. Billing cycle <span className="text-[#64748b] font-normal">(optional — auto-detected from Excel if left blank)</span>
           </label>
           <select
             value={cycleId}
             onChange={e => setCycleId(e.target.value)}
             className="w-full bg-[#1a1d27] border border-[#2a2d3e] rounded-lg px-3 py-2 text-sm text-[#f1f5f9] focus:outline-none focus:ring-1 focus:ring-orange-500/50"
           >
-            <option value="">— Select a billing cycle —</option>
+            <option value="">✨ Auto-detect from Excel (creates new cycle)</option>
             {billingCycles.map(c => (
               <option key={c.id} value={c.id}>
                 {c.cycle_name || c.id.slice(0,8)} · {c.period_start} → {c.period_end} · {c.status}
               </option>
             ))}
           </select>
+          {!cycleId && (
+            <p className="text-xs text-[#64748b] mt-1.5">
+              📅 Week labels + date range will be read from the Excel to name and date the cycle automatically.
+            </p>
+          )}
         </div>
 
         {/* Step 2: Upload File */}
@@ -181,9 +187,14 @@ export function XlsxImportSection({ billingCycles }: Props) {
           <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
-              <span className="text-sm font-medium text-green-400">
-                Import complete — {result.total_jobs} jobs added to {result.cycle_name}
-              </span>
+              <div>
+                <span className="text-sm font-medium text-green-400">
+                  Import complete — {result.total_jobs} jobs added to <strong>{result.cycle_name}</strong>
+                </span>
+                {result.auto_created_cycle && (
+                  <p className="text-xs text-orange-400 mt-0.5">✨ New billing cycle created automatically from Excel data</p>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
               {[

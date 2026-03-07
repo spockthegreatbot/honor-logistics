@@ -42,15 +42,6 @@ export async function POST(request: NextRequest) {
   const cycleId = formData.get('cycle_id') as string | null
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-  if (!cycleId) return NextResponse.json({ error: 'No billing cycle selected' }, { status: 400 })
-
-  // Verify cycle exists
-  const { data: cycle, error: cycleErr } = await supabase
-    .from('billing_cycles')
-    .select('id, cycle_name, client_id')
-    .eq('id', cycleId)
-    .single()
-  if (cycleErr || !cycle) return NextResponse.json({ error: 'Billing cycle not found' }, { status: 404 })
 
   const buffer = await file.arrayBuffer()
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: false })
@@ -58,7 +49,77 @@ export async function POST(request: NextRequest) {
   // Get EFEX client id
   const { data: clients } = await supabase.from('clients').select('id, name')
   const efexClient = clients?.find(c => c.name.toLowerCase().includes('efex'))
-  const clientId = cycle.client_id || efexClient?.id
+
+  let resolvedCycleId = cycleId
+  let resolvedCycleName = ''
+
+  if (!resolvedCycleId) {
+    // Auto-detect cycle info from Excel
+    // Week labels from Storage tab
+    const storageWs = workbook.Sheets['Storage']
+    const storageData = storageWs ? (XLSX.utils.sheet_to_json<unknown[]>(storageWs, { header: 1, defval: null }) as unknown[][]) : []
+    const weekLabels = [...new Set(
+      storageData.slice(5)
+        .map(r => r[2] ? String(r[2]).trim() : null)
+        .filter(Boolean) as string[]
+    )].sort()
+
+    // Date range from Delivery sheet
+    const deliveryWs = workbook.Sheets['Delivery & Collection']
+    const deliveryData = deliveryWs ? (XLSX.utils.sheet_to_json<unknown[]>(deliveryWs, { header: 1, defval: null }) as unknown[][]) : []
+    const dates: string[] = deliveryData.slice(2)
+      .map(r => dtStr(r[1]))
+      .filter(Boolean) as string[]
+    const periodStart = dates.length ? dates.reduce((a, b) => a < b ? a : b) : new Date().toISOString().slice(0, 10)
+    const periodEnd = dates.length ? dates.reduce((a, b) => a > b ? a : b) : new Date().toISOString().slice(0, 10)
+
+    // FY from Storage
+    const fyRow = storageData.slice(5).find(r => r[3])
+    const fyNum = fyRow ? Number(fyRow[3]) : new Date().getFullYear() % 100
+    const fyLabel = `FY${fyNum - 1}-${fyNum}`
+
+    // Build cycle name e.g. "Week 33-34 FY25-26"
+    const weekRange = weekLabels.length === 1
+      ? weekLabels[0]
+      : `${weekLabels[0]?.replace('Week ', 'Week ')}-${weekLabels[weekLabels.length - 1]?.replace('Week ', '')}`
+    resolvedCycleName = `${weekRange} ${fyLabel}`
+
+    // Create new billing cycle
+    const { data: newCycle, error: createErr } = await supabase
+      .from('billing_cycles')
+      .insert({
+        cycle_name: resolvedCycleName,
+        client_id: efexClient?.id ?? null,
+        period_start: periodStart,
+        period_end: periodEnd,
+        financial_year: fyLabel,
+        status: 'open',
+        total_runup: 0, total_delivery: 0, total_fuel_surcharge: 0,
+        total_install: 0, total_storage: 0, total_toner: 0,
+        discount_amount: 0, subtotal: 0, gst_amount: 0, grand_total: 0,
+      })
+      .select('id, cycle_name')
+      .single()
+
+    if (createErr || !newCycle) {
+      return NextResponse.json({ error: `Failed to auto-create billing cycle: ${createErr?.message}` }, { status: 500 })
+    }
+    resolvedCycleId = newCycle.id
+    resolvedCycleName = newCycle.cycle_name ?? resolvedCycleName
+  } else {
+    // Verify existing cycle
+    const { data: cycle, error: cycleErr } = await supabase
+      .from('billing_cycles')
+      .select('id, cycle_name, client_id')
+      .eq('id', resolvedCycleId)
+      .single()
+    if (cycleErr || !cycle) return NextResponse.json({ error: 'Billing cycle not found' }, { status: 404 })
+    resolvedCycleName = cycle.cycle_name ?? ''
+  }
+
+  const activeCycleId = resolvedCycleId
+
+  const clientId = efexClient?.id ?? null
 
   const counts: Record<string, number> = { runup: 0, install: 0, delivery: 0, collection: 0, toner: 0, storage: 0, storage_total: 0, errors: 0 }
 
@@ -76,7 +137,7 @@ export async function POST(request: NextRequest) {
       job_number: `HRL-IMP-${jobCounter++}`,
       job_type: type,
       status: 'complete',
-      billing_cycle_id: cycleId,
+      billing_cycle_id: activeCycleId,
       client_id: clientId,
       scheduled_date: date,
       serial_number: serial || null,
@@ -187,7 +248,7 @@ export async function POST(request: NextRequest) {
     const qty = sf(row[5]); const cost = sf(row[6]); const total = sf(row[7])
     if (total === 0) continue
     storageBulk.push({
-      billing_cycle_id: cycleId,
+      billing_cycle_id: activeCycleId,
       week_label: ss(row[2]),
       storage_type: ss(row[4]),
       qty: Math.round(qty),
@@ -198,19 +259,21 @@ export async function POST(request: NextRequest) {
     storageTotal += total
   }
   if (storageBulk.length > 0) {
-    await supabase.from('storage_weekly').delete().eq('billing_cycle_id', cycleId)
+    await supabase.from('storage_weekly').delete().eq('billing_cycle_id', activeCycleId)
     await supabase.from('storage_weekly').insert(storageBulk)
   }
   counts.storage = storageBulk.length
   counts.storage_total = storageTotal
 
   // Auto-trigger recalculate
-  const recalcUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://honor-logistics.vercel.app'}/api/billing/${cycleId}/calculate`
+  const recalcUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://honor-logistics.vercel.app'}/api/billing/${activeCycleId}/calculate`
   fetch(recalcUrl, { method: 'POST', headers: { 'Cookie': request.headers.get('cookie') || '' } }).catch(() => {})
 
   return NextResponse.json({
     success: true,
-    cycle_name: cycle.cycle_name,
+    cycle_name: resolvedCycleName,
+    cycle_id: resolvedCycleId,
+    auto_created_cycle: !formData.get('cycle_id'),
     imported: counts,
     total_jobs: allCreated.length,
   })
