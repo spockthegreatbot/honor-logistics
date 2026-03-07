@@ -90,3 +90,37 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+export async function DELETE(request: NextRequest, { params }: RouteContext) {
+  const user = await requireAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await params
+  const supabase = await createClient()
+
+  try {
+    // Delete storage_weekly rows
+    await supabase.from('storage_weekly').delete().eq('billing_cycle_id', id)
+
+    // Get all job IDs for this cycle, then delete their details
+    const { data: jobs } = await supabase.from('jobs').select('id').eq('billing_cycle_id', id)
+    if (jobs && jobs.length > 0) {
+      const ids = jobs.map(j => j.id)
+      for (const tbl of ['runup_details', 'install_details', 'delivery_details', 'toner_orders']) {
+        for (const jid of ids) {
+          await supabase.from(tbl).delete().eq('job_id', jid)
+        }
+      }
+      await supabase.from('jobs').delete().eq('billing_cycle_id', id)
+    }
+
+    // Delete the cycle itself
+    const { error } = await supabase.from('billing_cycles').delete().eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error(`DELETE /api/billing/${id} error:`, err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

@@ -160,6 +160,10 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
   const [closeOpen, setCloseOpen] = useState(false)
   const [closing, setClosing] = useState(false)
 
+  // Delete cycle modal
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
   const [error, setError] = useState('')
 
   const currentStatus = cycle.status ?? 'open'
@@ -278,6 +282,22 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
     }
   }
 
+  async function deleteCycle() {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/billing/${cycle.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        router.push('/billing')
+      } else {
+        const { error } = await res.json()
+        setError(error ?? 'Delete failed')
+        setDeleteOpen(false)
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   // Get pricing for storage type
   function getStoragePrice(storageType: string): number {
     const rule = pricingRules.find(r => r.job_type === 'storage' && r.line_item_name.toLowerCase().includes(storageType.toLowerCase()))
@@ -315,6 +335,14 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
               Close Cycle
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDeleteOpen(true)}
+            className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:border-red-500 hover:text-red-300"
+          >
+            Delete
+          </Button>
         </div>
       </div>
 
@@ -842,6 +870,35 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
               <Button variant="outline" onClick={() => setCloseOpen(false)}>Cancel</Button>
               <Button onClick={closeCycle} disabled={closing}>
                 {closing ? 'Closing...' : 'Close Cycle'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Delete Cycle Modal */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <div className={cn('fixed inset-0 z-50 flex items-center justify-center', !deleteOpen && 'hidden')}>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDeleteOpen(false)} />
+          <div className="relative z-50 bg-[#1e2130] border border-red-500/30 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-xl">🗑️</div>
+              <h2 className="text-lg font-semibold text-[#f1f5f9]">Delete Billing Cycle?</h2>
+            </div>
+            <p className="text-sm text-[#94a3b8] mb-3">
+              This will <strong className="text-red-400">permanently delete</strong> the cycle <strong className="text-[#f1f5f9]">{cycle.cycle_name}</strong> and all associated jobs, run-ups, deliveries, installs, and storage records.
+            </p>
+            <div className="bg-red-500/5 border border-red-500/20 rounded-lg px-4 py-3 mb-5 text-sm text-red-400">
+              ⚠️ This cannot be undone.
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>Cancel</Button>
+              <Button
+                onClick={deleteCycle}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700 text-white border-0"
+              >
+                {deleting ? 'Deleting...' : 'Yes, delete permanently'}
               </Button>
             </div>
           </div>
