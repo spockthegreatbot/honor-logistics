@@ -406,6 +406,20 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
               >
                 📄 Preview Invoice
               </Link>
+              <a
+                href={`/api/billing/${cycle.id}/export?format=xlsx`}
+                download
+                className="mt-2 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-[#2a2d3e] text-xs font-medium text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e] transition-colors"
+              >
+                ⬇ Download Excel
+              </a>
+              <a
+                href={`/api/billing/${cycle.id}/export?format=pdf`}
+                download
+                className="mt-2 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-[#2a2d3e] text-xs font-medium text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e] transition-colors"
+              >
+                ⬇ Download PDF
+              </a>
             </div>
           </Card>
         </div>
