@@ -59,7 +59,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     if (movError) console.error('Movement insert error:', movError)
 
     // Auto-create delivery job
-    const jobNumber = `HRL-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
+    const maxJobRow = await supabase.from("jobs").select("job_number").like("job_number","HRL-%").order("job_number",{ascending:false}).limit(1).single(); const lastNum = maxJobRow.data?.job_number ? parseInt(maxJobRow.data.job_number.split("-").pop() || "0") : 0; const jobNumber = `HRL-${new Date().getFullYear()}-${String(lastNum + 1).padStart(4,"0")}`
     const { data: newJob, error: jobError } = await supabase.from('jobs').insert({
       job_number: jobNumber,
       job_type: 'delivery',
