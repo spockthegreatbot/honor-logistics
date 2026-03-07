@@ -63,6 +63,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
   const [checkSaving, setCheckSaving] = useState(false)
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState('')
+  const [scheduledDate, setScheduledDate] = useState('')
 
   const fetchJob = useCallback(async () => {
     try {
@@ -72,6 +73,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         setJob(j)
         setNotes(j.notes ?? '')
         setStatus(j.status ?? '')
+        setScheduledDate(j.scheduled_date ?? '')
       }
     } catch (e) {
       console.error(e)
@@ -91,7 +93,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes, status }),
+        body: JSON.stringify({ notes, status, scheduled_date: scheduledDate || null }),
       })
       if (res.ok) {
         const { job: updated } = await res.json()
@@ -204,8 +206,13 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                   <p className="text-sm font-medium text-[#f1f5f9]">{jobTypeLabel(job.job_type)}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Scheduled</p>
-                  <p className="text-sm font-medium text-[#f1f5f9]">{formatDate(job.scheduled_date)}</p>
+                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Scheduled Date</p>
+                  <input
+                    type="date"
+                    value={scheduledDate}
+                    onChange={e => setScheduledDate(e.target.value)}
+                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500 [color-scheme:dark]"
+                  />
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Client</p>
