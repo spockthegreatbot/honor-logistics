@@ -18,6 +18,7 @@ import {
   Smartphone,
   BarChart3,
   FileText,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -31,6 +32,7 @@ const navItems = [
   { href: '/toner',      label: 'Toner Orders',      icon: Printer,         group: 'ops'  },
   { href: '/billing',    label: 'Billing',           icon: Receipt,         group: 'ops'  },
   { href: '/analytics',  label: '📊 Analytics',      icon: BarChart3,       group: 'ops'  },
+  { href: '/emails',     label: 'Email Inbox',       icon: Mail,            group: 'ops'  },
   { href: '/settings',   label: 'Settings',          icon: Settings2,       group: 'sys'  },
 ]
 
