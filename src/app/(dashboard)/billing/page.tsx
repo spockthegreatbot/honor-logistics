@@ -12,6 +12,7 @@ import {
   TableCell,
 } from '@/components/ui/table'
 import { formatDate, formatCurrency, cn } from '@/lib/utils'
+import { getClientColor, BILLING_CLIENTS } from '@/lib/client-colors'
 
 const billingStatusStyles: Record<string, string> = {
   open:     'bg-blue-500/15 text-blue-400 border border-blue-500/30',
@@ -39,25 +40,32 @@ export default async function BillingPage({ searchParams }: PageProps) {
   const supabase = await createClient()
 
   const [{ data: clients }, { data: allCycles }] = await Promise.all([
-    supabase.from('clients').select('id, name').order('name'),
+    supabase.from('clients').select('id, name, color_code').order('name'),
     supabase
       .from('billing_cycles')
-      .select('*, clients(id, name)')
+      .select('*, clients(id, name, color_code)')
       .order('created_at', { ascending: false }),
   ])
 
+  // Count open cycles per client
   const openByClient = (allCycles ?? []).reduce<Record<string, number>>((acc, c) => {
     const clientId = (c.clients as { id: string } | null)?.id ?? 'unknown'
     if (c.status === 'open') acc[clientId] = (acc[clientId] ?? 0) + 1
     return acc
   }, {})
 
+  // Filter cycles for display
   const cycles = (allCycles ?? []).filter((c) => {
     const cId = (c.clients as { id: string } | null)?.id
     if (clientFilter !== 'all' && cId !== clientFilter) return false
     if (statusFilter !== 'all' && c.status !== statusFilter) return false
     return true
   })
+
+  // Only show billing clients in the tab bar (EFEX, Fuji Solutions, Evolved Digital, AXUS)
+  const billingClientRows = (clients ?? []).filter((c) =>
+    BILLING_CLIENTS.includes(c.name as typeof BILLING_CLIENTS[number])
+  )
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -77,46 +85,68 @@ export default async function BillingPage({ searchParams }: PageProps) {
         </Button>
       </div>
 
-      {/* Open Cycles Summary Strip */}
-      {clients && clients.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {clients.map((client) => {
-            const open = openByClient[client.id] ?? 0
-            const isActive = clientFilter === client.id
-            return (
-              <Link
-                key={client.id}
-                href={`/billing?client=${client.id}`}
-                className={cn(
-                  'rounded-xl border p-3 text-center transition-all',
-                  isActive
-                    ? 'border-orange-500/50 bg-orange-500/10'
-                    : 'border-[#2a2d3e] bg-[#1e2130] hover:border-[#363a52]'
-                )}
-              >
-                <p className={cn('text-lg font-bold', open > 0 ? 'text-orange-400' : 'text-[#94a3b8]')}>
-                  {open}
-                </p>
-                <p className="text-xs text-[#f1f5f9] font-medium truncate">{client.name}</p>
-                <p className="text-xs text-[#94a3b8]">open</p>
-              </Link>
-            )
-          })}
-          <Link
-            href="/billing"
-            className={cn(
-              'rounded-xl border p-3 text-center transition-all',
-              clientFilter === 'all'
-                ? 'border-orange-500/50 bg-orange-500/10'
-                : 'border-[#2a2d3e] bg-[#1e2130] hover:border-[#363a52]'
-            )}
-          >
-            <p className="text-lg font-bold text-[#f1f5f9]">{(allCycles ?? []).filter(c => c.status === 'open').length}</p>
-            <p className="text-xs text-[#f1f5f9] font-medium">All Clients</p>
-            <p className="text-xs text-[#94a3b8]">open</p>
-          </Link>
-        </div>
-      )}
+      {/* Client Tab Bar */}
+      <div className="flex items-center gap-1 flex-wrap border-b border-[#2a2d3e] pb-0">
+        {/* All Clients tab */}
+        <Link
+          href="/billing"
+          className={cn(
+            'relative px-4 py-2.5 text-sm font-medium transition-colors rounded-t-lg -mb-px',
+            clientFilter === 'all'
+              ? 'text-[#f1f5f9] bg-[#1e2130] border border-b-[#1e2130] border-[#2a2d3e]'
+              : 'text-[#94a3b8] hover:text-[#f1f5f9] border border-transparent'
+          )}
+        >
+          All Clients
+          <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-[#2a2d3e] text-[#94a3b8]">
+            {(allCycles ?? []).filter((c) => c.status === 'open').length}
+          </span>
+        </Link>
+
+        {billingClientRows.map((client) => {
+          const color = getClientColor(client.name, client.color_code)
+          const openCount = openByClient[client.id] ?? 0
+          const isActive = clientFilter === client.id
+
+          return (
+            <Link
+              key={client.id}
+              href={`/billing?client=${client.id}`}
+              className={cn(
+                'relative px-4 py-2.5 text-sm font-medium transition-colors rounded-t-lg -mb-px flex items-center gap-2',
+                isActive
+                  ? 'text-[#f1f5f9] bg-[#1e2130] border border-b-[#1e2130] border-[#2a2d3e]'
+                  : 'text-[#94a3b8] hover:text-[#f1f5f9] border border-transparent'
+              )}
+            >
+              {/* Colored dot indicator */}
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: color }}
+              />
+              {client.name}
+              {openCount > 0 && (
+                <span
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold"
+                  style={{
+                    backgroundColor: `${color}20`,
+                    color,
+                  }}
+                >
+                  {openCount}
+                </span>
+              )}
+              {/* Active underline stripe */}
+              {isActive && (
+                <span
+                  className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t"
+                  style={{ backgroundColor: color }}
+                />
+              )}
+            </Link>
+          )
+        })}
+      </div>
 
       {/* Status filter pills */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -159,10 +189,15 @@ export default async function BillingPage({ searchParams }: PageProps) {
                     cycle.period_start || cycle.period_end
                       ? `${formatDate(cycle.period_start as string)} – ${formatDate(cycle.period_end as string)}`
                       : '—'
-                  const clientName = (cycle.clients as { name: string } | null)?.name ?? '—'
+                  const clientObj = cycle.clients as { name: string; color_code?: string | null } | null
+                  const clientName = clientObj?.name ?? '—'
+                  const clientColor = getClientColor(clientObj?.name, clientObj?.color_code)
 
                   return (
-                    <TableRow key={String(cycle.id)}>
+                    <TableRow
+                      key={String(cycle.id)}
+                      style={{ borderLeft: `3px solid ${clientColor}` }}
+                    >
                       <TableCell className="font-medium">
                         <Link
                           href={`/billing/${cycle.id}`}
@@ -172,7 +207,18 @@ export default async function BillingPage({ searchParams }: PageProps) {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-[#2a2d3e] text-[#94a3b8]">
+                        <span
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium"
+                          style={{
+                            backgroundColor: `${clientColor}15`,
+                            border: `1px solid ${clientColor}35`,
+                            color: clientColor,
+                          }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: clientColor }}
+                          />
                           {clientName}
                         </span>
                       </TableCell>

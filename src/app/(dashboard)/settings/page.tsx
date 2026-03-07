@@ -11,11 +11,12 @@ import { XlsxImportSection } from './xlsx-import-section'
 export default async function SettingsPage() {
   const supabase = await createClient()
 
-  const [{ data: pricingRules }, { data: clients }, { data: staff }, { data: billingCycles }] = await Promise.all([
+  const [{ data: pricingRules }, { data: clients }, { data: staff }, { data: billingCycles }, { data: billingClients }] = await Promise.all([
     supabase.from('pricing_rules').select('*').order('financial_year', { ascending: false }).order('job_type').order('line_item_name'),
     supabase.from('clients').select('*').order('name'),
     supabase.from('staff').select('*').eq('is_active', true).order('name'),
     supabase.from('billing_cycles').select('id, cycle_name, period_start, period_end, status').order('period_start', { ascending: false }),
+    supabase.from('clients').select('id, name, color_code').order('name'),
   ])
 
   const allYears = [...new Set((pricingRules ?? []).map(r => String(r.financial_year)).filter(Boolean))].sort().reverse()
@@ -154,7 +155,7 @@ export default async function SettingsPage() {
         {/* Import Tab */}
         <TabsContent value="import">
           <div className="space-y-6">
-            <XlsxImportSection billingCycles={billingCycles ?? []} />
+            <XlsxImportSection billingCycles={billingCycles ?? []} billingClients={billingClients ?? []} />
             <div className="border-t border-[#2a2d3e] pt-6">
               <p className="text-xs text-[#64748b] mb-4 px-1">Legacy: Import individual CSV sheets</p>
               <CsvImportSection />

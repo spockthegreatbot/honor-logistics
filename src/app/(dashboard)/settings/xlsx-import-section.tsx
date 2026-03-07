@@ -5,6 +5,7 @@ import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2 } from 'luc
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { getClientColor, BILLING_CLIENTS } from '@/lib/client-colors'
 
 interface BillingCycle {
   id: string
@@ -14,8 +15,15 @@ interface BillingCycle {
   status: string | null
 }
 
+interface BillingClient {
+  id: string
+  name: string
+  color_code?: string | null
+}
+
 interface Props {
   billingCycles: BillingCycle[]
+  billingClients?: BillingClient[]
 }
 
 interface ImportResult {
@@ -35,10 +43,11 @@ interface ImportResult {
   }
 }
 
-export function XlsxImportSection({ billingCycles }: Props) {
+export function XlsxImportSection({ billingCycles, billingClients = [] }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [cycleId, setCycleId] = useState('')
+  const [clientId, setClientId] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState('')
@@ -54,6 +63,7 @@ export function XlsxImportSection({ billingCycles }: Props) {
 
   async function handleImport() {
     if (!file) { setError('Please select an Excel file'); return }
+    if (!clientId) { setError('Please select a billing client'); return }
 
     setLoading(true)
     setError('')
@@ -63,6 +73,7 @@ export function XlsxImportSection({ billingCycles }: Props) {
       const fd = new FormData()
       fd.append('file', file)
       fd.append('cycle_id', cycleId)
+      fd.append('client_id', clientId)
 
       const res = await fetch('/api/import/xlsx', { method: 'POST', body: fd })
       const json = await res.json()
@@ -70,13 +81,24 @@ export function XlsxImportSection({ billingCycles }: Props) {
       if (!res.ok) { setError(json.error || 'Import failed'); return }
       setResult(json)
       setFile(null)
+      setCycleId('')
       if (fileRef.current) fileRef.current.value = ''
-    } catch (e) {
+    } catch {
       setError('Network error — please try again')
     } finally {
       setLoading(false)
     }
   }
+
+  // Only show known billing clients in the dropdown
+  const displayClients = billingClients.filter((c) =>
+    BILLING_CLIENTS.includes(c.name as typeof BILLING_CLIENTS[number])
+  )
+
+  const selectedClient = displayClients.find((c) => c.id === clientId)
+  const selectedColor = selectedClient
+    ? getClientColor(selectedClient.name, selectedClient.color_code)
+    : null
 
   return (
     <Card>
@@ -95,34 +117,80 @@ export function XlsxImportSection({ billingCycles }: Props) {
       </CardHeader>
 
       <CardContent className="pt-5 space-y-5">
-        {/* Step 1: Select Billing Cycle (optional) */}
+        {/* Step 1: Select Billing Client (required) */}
         <div>
           <label className="block text-sm font-medium text-[#94a3b8] mb-2">
-            1. Billing cycle <span className="text-[#64748b] font-normal">(optional — auto-detected from Excel if left blank)</span>
+            1. Billing client <span className="text-red-400">*</span>
+          </label>
+          <div className="relative">
+            <select
+              value={clientId}
+              onChange={(e) => {
+                setClientId(e.target.value)
+                setCycleId('') // reset cycle when client changes
+              }}
+              className="w-full bg-[#1a1d27] border border-[#2a2d3e] rounded-lg px-3 py-2 text-sm text-[#f1f5f9] focus:outline-none focus:ring-1 focus:ring-orange-500/50 appearance-none"
+              style={
+                selectedColor
+                  ? { borderLeftColor: selectedColor, borderLeftWidth: '3px' }
+                  : undefined
+              }
+            >
+              <option value="">— Select billing client —</option>
+              {displayClients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            {selectedClient && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
+                <span
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: selectedColor ?? '#64748b' }}
+                />
+              </div>
+            )}
+          </div>
+          {!clientId && (
+            <p className="text-xs text-amber-400/80 mt-1.5">
+              ⚠️ A billing client must be selected before importing.
+            </p>
+          )}
+        </div>
+
+        {/* Step 2: Select Billing Cycle (optional) */}
+        <div>
+          <label className="block text-sm font-medium text-[#94a3b8] mb-2">
+            2. Billing cycle <span className="text-[#64748b] font-normal">(optional — auto-detected from Excel if left blank)</span>
           </label>
           <select
             value={cycleId}
-            onChange={e => setCycleId(e.target.value)}
-            className="w-full bg-[#1a1d27] border border-[#2a2d3e] rounded-lg px-3 py-2 text-sm text-[#f1f5f9] focus:outline-none focus:ring-1 focus:ring-orange-500/50"
+            onChange={(e) => setCycleId(e.target.value)}
+            disabled={!clientId}
+            className={cn(
+              'w-full bg-[#1a1d27] border border-[#2a2d3e] rounded-lg px-3 py-2 text-sm text-[#f1f5f9] focus:outline-none focus:ring-1 focus:ring-orange-500/50',
+              !clientId && 'opacity-40 cursor-not-allowed'
+            )}
           >
             <option value="">✨ Auto-detect from Excel (creates new cycle)</option>
-            {billingCycles.map(c => (
+            {billingCycles.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.cycle_name || c.id.slice(0,8)} · {c.period_start} → {c.period_end} · {c.status}
+                {c.cycle_name || c.id.slice(0, 8)} · {c.period_start} → {c.period_end} · {c.status}
               </option>
             ))}
           </select>
-          {!cycleId && (
+          {!cycleId && clientId && (
             <p className="text-xs text-[#64748b] mt-1.5">
               📅 Week labels + date range will be read from the Excel to name and date the cycle automatically.
             </p>
           )}
         </div>
 
-        {/* Step 2: Upload File */}
+        {/* Step 3: Upload File */}
         <div>
           <label className="block text-sm font-medium text-[#94a3b8] mb-2">
-            2. Upload Excel file (.xlsx)
+            3. Upload Excel file (.xlsx)
           </label>
           <div
             className={cn(
@@ -131,9 +199,9 @@ export function XlsxImportSection({ billingCycles }: Props) {
               file ? 'border-green-500/40 bg-green-500/5' : ''
             )}
             onClick={() => fileRef.current?.click()}
-            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
-            onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]) }}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]) }}
           >
             {file ? (
               <div className="flex flex-col items-center gap-2">
@@ -142,7 +210,7 @@ export function XlsxImportSection({ billingCycles }: Props) {
                 <p className="text-xs text-[#94a3b8]">{(file.size / 1024 / 1024).toFixed(1)} MB · Ready to import</p>
                 <button
                   className="text-xs text-[#94a3b8] hover:text-red-400 underline mt-1"
-                  onClick={e => { e.stopPropagation(); setFile(null); if (fileRef.current) fileRef.current.value = '' }}
+                  onClick={(e) => { e.stopPropagation(); setFile(null); if (fileRef.current) fileRef.current.value = '' }}
                 >
                   Remove
                 </button>
@@ -155,7 +223,7 @@ export function XlsxImportSection({ billingCycles }: Props) {
               </div>
             )}
           </div>
-          <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={e => handleFile(e.target.files?.[0] ?? null)} />
+          <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
         </div>
 
         {/* What gets imported */}
@@ -171,7 +239,7 @@ export function XlsxImportSection({ billingCycles }: Props) {
         {/* Import button */}
         <Button
           onClick={handleImport}
-          disabled={!file || loading}
+          disabled={!file || !clientId || loading}
           className="w-full"
           size="lg"
         >

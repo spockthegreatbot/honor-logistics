@@ -10,7 +10,7 @@ async function JobsPageInner() {
   const { data: jobs, count } = await supabase
     .from('jobs')
     .select(
-      '*, clients(name), end_customers(name), staff:assigned_to(name), runup_details(check_signed_off)',
+      '*, clients(name, color_code), end_customers(name), staff:assigned_to(name), runup_details(check_signed_off)',
       { count: 'exact' }
     )
     .order('created_at', { ascending: false })

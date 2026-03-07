@@ -23,6 +23,7 @@ import {
   TableCell,
 } from '@/components/ui/table'
 import { formatDate, jobTypeLabel, formatCurrency } from '@/lib/utils'
+import { getClientColor, BILLING_CLIENTS } from '@/lib/client-colors'
 
 interface StatCardProps {
   label: string
@@ -85,7 +86,7 @@ export default async function DashboardPage() {
         .eq('is_active', true),
       supabase
         .from('billing_cycles')
-        .select('grand_total')
+        .select('grand_total, period_start, period_end, cycle_name, clients(id, name, color_code)')
         .eq('status', 'open'),
       supabase
         .from('jobs')
@@ -182,6 +183,95 @@ export default async function DashboardPage() {
           iconColor="text-cyan-400"
         />
       </div>
+
+      {/* Open Billing Cycles — one card per billing client */}
+      {openCycles && openCycles.length > 0 && (() => {
+        // Build a map: clientName → best open cycle (latest)
+        const clientCycleMap: Record<string, {
+          cycle_name: string | null
+          grand_total: number
+          period_start: string | null
+          period_end: string | null
+          color_code: string | null
+        }> = {}
+
+        for (const c of openCycles) {
+          const cl = (c as Record<string, unknown>).clients as { name: string; color_code?: string | null } | null
+          if (!cl?.name) continue
+          if (!clientCycleMap[cl.name]) {
+            clientCycleMap[cl.name] = {
+              cycle_name: (c as Record<string, unknown>).cycle_name as string | null,
+              grand_total: ((c as Record<string, unknown>).grand_total as number) ?? 0,
+              period_start: (c as Record<string, unknown>).period_start as string | null,
+              period_end: (c as Record<string, unknown>).period_end as string | null,
+              color_code: cl.color_code ?? null,
+            }
+          }
+        }
+
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-semibold text-[#f1f5f9]">Open Billing Cycles</h2>
+              <Link href="/billing?status=open" className="text-sm text-orange-400 hover:text-orange-300 font-medium flex items-center gap-1 transition">
+                View all <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {BILLING_CLIENTS.map((clientName) => {
+                const cycle = clientCycleMap[clientName]
+                const color = getClientColor(clientName, cycle?.color_code)
+
+                // Days in cycle
+                let daysInCycle: number | null = null
+                if (cycle?.period_start && cycle?.period_end) {
+                  const start = new Date(cycle.period_start)
+                  const end = new Date(cycle.period_end)
+                  daysInCycle = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+                }
+
+                return (
+                  <Link
+                    key={clientName}
+                    href={`/billing?status=open&client=${clientName}`}
+                    className="rounded-xl border bg-[#1e2130] p-4 transition-all hover:border-opacity-70 hover:bg-[#222538] block"
+                    style={{ borderColor: `${color}50`, borderLeftWidth: '3px', borderLeftColor: color }}
+                  >
+                    {/* Client name with dot */}
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: color }}
+                      />
+                      <span className="text-xs font-bold uppercase tracking-wide" style={{ color }}>
+                        {clientName}
+                      </span>
+                    </div>
+
+                    {/* Cycle name or placeholder */}
+                    <p className="text-sm font-semibold text-[#f1f5f9] truncate mb-1">
+                      {cycle?.cycle_name ?? 'No open cycle'}
+                    </p>
+
+                    {/* Grand total */}
+                    <p className="text-xl font-bold tabular-nums" style={{ color: cycle ? color : '#64748b' }}>
+                      {cycle ? formatCurrency(cycle.grand_total) : '$0.00'}
+                    </p>
+
+                    {/* Days in cycle */}
+                    {daysInCycle !== null && (
+                      <p className="text-xs text-[#94a3b8] mt-1">{daysInCycle} day cycle</p>
+                    )}
+                    {!cycle && (
+                      <p className="text-xs text-[#64748b] mt-1">No active cycle</p>
+                    )}
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Recent Jobs */}
       <Card>

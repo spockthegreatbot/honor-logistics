@@ -1,7 +1,32 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendTelegramAlert } from '@/lib/telegram'
 import { requireAuth } from '@/lib/require-auth'
+
+export async function GET(request: NextRequest) {
+  const user = await requireAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const supabase = await createClient()
+  const { searchParams } = new URL(request.url)
+  const clientId = searchParams.get('client_id')
+  const status = searchParams.get('status')
+
+  let query = supabase
+    .from('jobs')
+    .select(
+      '*, clients(name, color_code), end_customers(name), staff:assigned_to(name), runup_details(check_signed_off)',
+      { count: 'exact' }
+    )
+    .order('created_at', { ascending: false })
+
+  if (clientId && clientId !== 'all') query = query.eq('client_id', clientId)
+  if (status && status !== 'all') query = query.eq('status', status)
+
+  const { data, error, count } = await query
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ data: data ?? [], count })
+}
 
 export async function POST(request: Request) {
   const user = await requireAuth()

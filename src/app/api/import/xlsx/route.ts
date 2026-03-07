@@ -40,15 +40,21 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData()
   const file = formData.get('file') as File | null
   const cycleId = formData.get('cycle_id') as string | null
+  const formClientId = (formData.get('client_id') as string | null) || null
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
   const buffer = await file.arrayBuffer()
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: false })
 
-  // Get EFEX client id
+  // Get client list; use provided client_id, or fall back to EFEX
   const { data: clients } = await supabase.from('clients').select('id, name')
   const efexClient = clients?.find(c => c.name.toLowerCase().includes('efex'))
+
+  // Resolve the billing client for this import
+  const resolvedImportClientId = formClientId
+    ?? efexClient?.id
+    ?? null
 
   let resolvedCycleId = cycleId
   let resolvedCycleName = ''
@@ -89,7 +95,7 @@ export async function POST(request: NextRequest) {
       .from('billing_cycles')
       .insert({
         cycle_name: resolvedCycleName,
-        client_id: efexClient?.id ?? null,
+        client_id: resolvedImportClientId,
         period_start: periodStart,
         period_end: periodEnd,
         financial_year: fyLabel,
@@ -119,7 +125,7 @@ export async function POST(request: NextRequest) {
 
   const activeCycleId = resolvedCycleId
 
-  const clientId = efexClient?.id ?? null
+  const clientId = resolvedImportClientId
 
   const counts: Record<string, number> = { runup: 0, install: 0, delivery: 0, collection: 0, toner: 0, storage: 0, storage_total: 0, errors: 0 }
 

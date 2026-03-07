@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('billing_cycles')
-    .select('*, clients(id, name)', { count: 'exact' })
+    .select('*, clients(id, name, color_code)', { count: 'exact' })
     .order('created_at', { ascending: false })
 
   if (clientId && clientId !== 'all') query = query.eq('client_id', clientId)

@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { Calendar, User } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/badge'
-import { formatDate, jobTypeLabel, getInitials, jobStatusLabel } from '@/lib/utils'
+import { formatDate, jobTypeLabel, getInitials } from '@/lib/utils'
+import { getClientColor, getClientShortName, BILLING_CLIENTS } from '@/lib/client-colors'
 
 type JobStatus = 'new' | 'runup_pending' | 'runup_complete' | 'ready' | 'dispatched' | 'complete' | 'invoiced'
 
@@ -15,7 +16,8 @@ interface Job {
   status: string | null
   serial_number: string | null
   scheduled_date: string | null
-  clients?: { name: string } | null
+  client_id?: string | null
+  clients?: { name: string; color_code?: string | null } | null
   end_customers?: { name: string } | null
   staff?: { name: string } | null
   runup_details?: { check_signed_off: boolean | null } | null
@@ -42,6 +44,28 @@ const JOB_TYPE_COLORS: Record<string, string> = {
   storage:    'bg-slate-500/10 border-slate-500/20 text-slate-400',
 }
 
+/** Colored pill badge shown on each Kanban card */
+function ClientBadge({ name, colorCode }: { name: string; colorCode?: string | null }) {
+  const color = getClientColor(name, colorCode)
+  const short = getClientShortName(name)
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold leading-tight"
+      style={{
+        backgroundColor: `${color}18`,
+        border: `1px solid ${color}40`,
+        color,
+      }}
+    >
+      <span
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ backgroundColor: color }}
+      />
+      {short}
+    </span>
+  )
+}
+
 function JobCard({
   job,
   index,
@@ -53,6 +77,8 @@ function JobCard({
 }) {
   const typeColor = JOB_TYPE_COLORS[job.job_type] ?? 'bg-[#2a2d3e] border-[#363a52] text-[#94a3b8]'
   const staffInitials = job.staff?.name ? getInitials(job.staff.name) : null
+  const clientName = job.clients?.name
+  const clientColor = getClientColor(clientName, job.clients?.color_code)
 
   return (
     <Draggable draggableId={job.id} index={index}>
@@ -63,59 +89,65 @@ function JobCard({
           {...provided.dragHandleProps}
           onClick={onClick}
           className={`
-            rounded-xl border bg-[#1e2130] p-3 cursor-pointer
-            transition-all duration-150 group
+            rounded-xl border bg-[#1e2130] cursor-pointer
+            transition-all duration-150 group overflow-hidden
             ${snapshot.isDragging
               ? 'border-orange-500/50 shadow-lg shadow-orange-500/10 scale-[1.02]'
               : 'border-[#2a2d3e] hover:border-[#363a52]'
             }
           `}
+          style={{
+            borderLeft: clientName ? `3px solid ${clientColor}` : undefined,
+          }}
         >
-          {/* Top row: job number + type badge */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-mono text-xs font-bold text-orange-400">
-              #{String(job.job_number ?? job.id).slice(-6).toUpperCase()}
-            </span>
-            <span className={`text-xs px-1.5 py-0.5 rounded-md border font-medium ${typeColor}`}>
-              {jobTypeLabel(job.job_type)}
-            </span>
-          </div>
+          <div className="p-3">
+            {/* Top row: job number + type badge */}
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-mono text-xs font-bold text-orange-400">
+                #{String(job.job_number ?? job.id).slice(-6).toUpperCase()}
+              </span>
+              <span className={`text-xs px-1.5 py-0.5 rounded-md border font-medium ${typeColor}`}>
+                {jobTypeLabel(job.job_type)}
+              </span>
+            </div>
 
-          {/* Client */}
-          {job.clients?.name && (
-            <p className="text-xs font-semibold text-[#f1f5f9] truncate mb-0.5">{job.clients.name}</p>
-          )}
-
-          {/* End Customer */}
-          {job.end_customers?.name && (
-            <p className="text-xs text-[#94a3b8] truncate mb-2">{job.end_customers.name}</p>
-          )}
-
-          {/* Serial */}
-          {job.serial_number && (
-            <p className="text-xs font-mono text-[#94a3b8]/70 truncate mb-2">{job.serial_number}</p>
-          )}
-
-          {/* Bottom row: date + staff */}
-          <div className="flex items-center justify-between gap-2 mt-2">
-            {job.scheduled_date ? (
-              <div className="flex items-center gap-1 text-xs text-[#94a3b8]">
-                <Calendar className="w-3 h-3" />
-                {formatDate(job.scheduled_date)}
-              </div>
-            ) : (
-              <span />
-            )}
-            {staffInitials && (
-              <div className="w-6 h-6 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center shrink-0">
-                <span className="text-[10px] font-bold text-orange-400">{staffInitials}</span>
+            {/* Client badge */}
+            {clientName && (
+              <div className="mb-1.5">
+                <ClientBadge name={clientName} colorCode={job.clients?.color_code} />
               </div>
             )}
-            {!staffInitials && (
-              <div className="w-6 h-6 rounded-full bg-[#2a2d3e] flex items-center justify-center shrink-0">
-                <User className="w-3 h-3 text-[#94a3b8]/50" />
-              </div>
+
+            {/* End Customer */}
+            {job.end_customers?.name && (
+              <p className="text-xs text-[#94a3b8] truncate mb-2">{job.end_customers.name}</p>
             )}
+
+            {/* Serial */}
+            {job.serial_number && (
+              <p className="text-xs font-mono text-[#94a3b8]/70 truncate mb-2">{job.serial_number}</p>
+            )}
+
+            {/* Bottom row: date + staff */}
+            <div className="flex items-center justify-between gap-2 mt-2">
+              {job.scheduled_date ? (
+                <div className="flex items-center gap-1 text-xs text-[#94a3b8]">
+                  <Calendar className="w-3 h-3" />
+                  {formatDate(job.scheduled_date)}
+                </div>
+              ) : (
+                <span />
+              )}
+              {staffInitials ? (
+                <div className="w-6 h-6 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center shrink-0">
+                  <span className="text-[10px] font-bold text-orange-400">{staffInitials}</span>
+                </div>
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-[#2a2d3e] flex items-center justify-center shrink-0">
+                  <User className="w-3 h-3 text-[#94a3b8]/50" />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -131,10 +163,21 @@ interface Props {
 export function KanbanBoard({ initialJobs, onJobClick }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs)
   const [dragError, setDragError] = useState<string | null>(null)
+  const [clientFilter, setClientFilter] = useState<string | null>(null)
 
-  // Group jobs by status
+  // Determine which billing clients actually appear in the job list
+  const presentClients = BILLING_CLIENTS.filter((c) =>
+    jobs.some((j) => j.clients?.name === c)
+  )
+
+  // Apply client filter
+  const visibleJobs = clientFilter
+    ? jobs.filter((j) => j.clients?.name === clientFilter)
+    : jobs
+
+  // Group by status
   const byStatus = COLUMNS.reduce<Record<string, Job[]>>((acc, col) => {
-    acc[col.id] = jobs.filter((j) => j.status === col.id)
+    acc[col.id] = visibleJobs.filter((j) => j.status === col.id)
     return acc
   }, {})
 
@@ -146,12 +189,10 @@ export function KanbanBoard({ initialJobs, onJobClick }: Props) {
     const newStatus = destination.droppableId as JobStatus
     setDragError(null)
 
-    // Optimistic update
     setJobs((prev) =>
       prev.map((j) => (j.id === draggableId ? { ...j, status: newStatus } : j))
     )
 
-    // Persist to DB
     try {
       const res = await fetch(`/api/jobs/${draggableId}`, {
         method: 'PATCH',
@@ -159,15 +200,12 @@ export function KanbanBoard({ initialJobs, onJobClick }: Props) {
         body: JSON.stringify({ status: newStatus }),
       })
       if (!res.ok) {
-        // Revert and show error
         setJobs((prev) =>
           prev.map((j) => (j.id === draggableId ? { ...j, status: source.droppableId } : j))
         )
         setDragError('Failed to update job status. Change reverted.')
       }
-    } catch (e) {
-      console.error('Failed to update job status:', e)
-      // Revert and show error
+    } catch {
       setJobs((prev) =>
         prev.map((j) => (j.id === draggableId ? { ...j, status: source.droppableId } : j))
       )
@@ -176,61 +214,130 @@ export function KanbanBoard({ initialJobs, onJobClick }: Props) {
   }
 
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      {dragError && (
-        <div className="mb-3 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-400">
-          {dragError}
+    <div className="space-y-3">
+      {/* Client filter chips */}
+      {presentClients.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setClientFilter(null)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+              clientFilter === null
+                ? 'bg-[#f1f5f9] text-[#0f1117] border-[#f1f5f9]'
+                : 'bg-transparent text-[#94a3b8] border-[#2a2d3e] hover:border-[#4a4d5e] hover:text-[#f1f5f9]'
+            }`}
+          >
+            All
+          </button>
+          {presentClients.map((clientName) => {
+            // Find a job for this client to get color_code if available
+            const sampleJob = jobs.find((j) => j.clients?.name === clientName)
+            const color = getClientColor(clientName, sampleJob?.clients?.color_code)
+            const isActive = clientFilter === clientName
+            const jobCount = jobs.filter((j) => j.clients?.name === clientName).length
+            return (
+              <button
+                key={clientName}
+                onClick={() => setClientFilter(isActive ? null : clientName)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+                style={
+                  isActive
+                    ? {
+                        backgroundColor: `${color}20`,
+                        borderColor: color,
+                        color,
+                      }
+                    : {
+                        backgroundColor: 'transparent',
+                        borderColor: '#2a2d3e',
+                        color: '#94a3b8',
+                      }
+                }
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.borderColor = color
+                    e.currentTarget.style.color = color
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.borderColor = '#2a2d3e'
+                    e.currentTarget.style.color = '#94a3b8'
+                  }
+                }}
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: color }}
+                />
+                {clientName}
+                <span
+                  className="ml-0.5 px-1 rounded text-[10px] font-bold"
+                  style={{ backgroundColor: `${color}25`, color }}
+                >
+                  {jobCount}
+                </span>
+              </button>
+            )
+          })}
         </div>
       )}
-      <div className="flex gap-3 overflow-x-auto pb-4 min-h-[calc(100vh-220px)]">
-        {COLUMNS.map((col) => {
-          const colJobs = byStatus[col.id] ?? []
-          return (
-            <div
-              key={col.id}
-              className={`flex-shrink-0 w-64 flex flex-col rounded-xl border bg-[#0f1117] ${col.accent}`}
-            >
-              {/* Column Header */}
-              <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#2a2d3e]">
-                <span className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">
-                  {col.label}
-                </span>
-                <span className="text-xs font-bold text-[#94a3b8] bg-[#2a2d3e] rounded-full w-5 h-5 flex items-center justify-center">
-                  {colJobs.length}
-                </span>
-              </div>
 
-              {/* Drop zone */}
-              <Droppable droppableId={col.id}>
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={`flex-1 p-2 space-y-2 overflow-y-auto kanban-column min-h-[100px] rounded-b-xl transition-colors ${
-                      snapshot.isDraggingOver ? 'bg-[#1a1d27]' : ''
-                    }`}
-                  >
-                    {colJobs.map((job, index) => (
-                      <JobCard
-                        key={job.id}
-                        job={job}
-                        index={index}
-                        onClick={() => onJobClick(job.id)}
-                      />
-                    ))}
-                    {provided.placeholder}
-                    {colJobs.length === 0 && !snapshot.isDraggingOver && (
-                      <div className="text-xs text-[#94a3b8]/30 text-center py-4">
-                        No jobs
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Droppable>
-            </div>
-          )
-        })}
-      </div>
-    </DragDropContext>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        {dragError && (
+          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm text-red-400">
+            {dragError}
+          </div>
+        )}
+        <div className="flex gap-3 overflow-x-auto pb-4 min-h-[calc(100vh-260px)]">
+          {COLUMNS.map((col) => {
+            const colJobs = byStatus[col.id] ?? []
+            return (
+              <div
+                key={col.id}
+                className={`flex-shrink-0 w-64 flex flex-col rounded-xl border bg-[#0f1117] ${col.accent}`}
+              >
+                {/* Column Header */}
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#2a2d3e]">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">
+                    {col.label}
+                  </span>
+                  <span className="text-xs font-bold text-[#94a3b8] bg-[#2a2d3e] rounded-full w-5 h-5 flex items-center justify-center">
+                    {colJobs.length}
+                  </span>
+                </div>
+
+                {/* Drop zone */}
+                <Droppable droppableId={col.id}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`flex-1 p-2 space-y-2 overflow-y-auto kanban-column min-h-[100px] rounded-b-xl transition-colors ${
+                        snapshot.isDraggingOver ? 'bg-[#1a1d27]' : ''
+                      }`}
+                    >
+                      {colJobs.map((job, index) => (
+                        <JobCard
+                          key={job.id}
+                          job={job}
+                          index={index}
+                          onClick={() => onJobClick(job.id)}
+                        />
+                      ))}
+                      {provided.placeholder}
+                      {colJobs.length === 0 && !snapshot.isDraggingOver && (
+                        <div className="text-xs text-[#94a3b8]/30 text-center py-4">
+                          No jobs
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+            )
+          })}
+        </div>
+      </DragDropContext>
+    </div>
   )
 }
