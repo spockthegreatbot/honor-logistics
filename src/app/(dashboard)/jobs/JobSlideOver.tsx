@@ -423,7 +423,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                     )}
                     {job.install_details[0].fma_required && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300 font-medium">
-                        ⚠️ FMA — confirm fleet monitoring active after install
+                        ⚠️ FMA Required
                       </span>
                     )}
                     {job.install_details[0].papercut_required && (
