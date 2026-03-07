@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     // Load known client email domains for matching
     const { data: clients } = await supabase
       .from('clients')
-      .select('id, name, contact_email')
+      .select('id, name, billing_email')
 
     const processed: string[] = []
     const uidsToMark: number[] = []
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       // Try to match sender to a client
       const senderDomain = email.from.split('@')[1]?.toLowerCase()
       const matchedClient = clients?.find(c => {
-        const clientDomain = c.contact_email?.split('@')[1]?.toLowerCase()
+        const clientDomain = c.billing_email?.split('@')[1]?.toLowerCase()
         return clientDomain && clientDomain === senderDomain
       })
 
