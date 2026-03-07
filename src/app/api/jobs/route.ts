@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const clientId = searchParams.get('client_id')
   const status = searchParams.get('status')
+  const clientRef = searchParams.get('client_reference')
 
   const showAll = searchParams.get('show_all') === '1'
 
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false })
 
   if (clientId && clientId !== 'all') query = query.eq('client_id', clientId)
+  if (clientRef) query = query.ilike('client_reference', `%${clientRef}%`)
   if (status && status !== 'all') {
     query = query.eq('status', status)
   } else if (!showAll) {
@@ -56,6 +58,7 @@ export async function POST(request: Request) {
       assigned_to,
       po_number,
       notes,
+      client_reference,
     } = body
 
     if (!job_type || !client_id) {
@@ -80,6 +83,7 @@ export async function POST(request: Request) {
         assigned_to: assigned_to || null,
         po_number: po_number || null,
         notes: notes || null,
+        client_reference: client_reference || null,
       })
       .select()
       .single()

@@ -166,8 +166,21 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
 
   const [error, setError] = useState('')
 
-  const currentStatus = cycle.status ?? 'open'
+  const [currentStatus, setCurrentStatus] = useState(cycle.status ?? 'open')
   const isEditable = currentStatus === 'open'
+  const isInvoiced = currentStatus === 'invoiced'
+
+  async function unlockCycle() {
+    const res = await fetch(`/api/billing/${cycle.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'review' }),
+    })
+    if (res.ok) {
+      setCurrentStatus('review')
+      startTransition(() => router.refresh())
+    }
+  }
 
   // Compute subtotals from jobs for the right panel
   const runupJobs = jobs.filter(j => j.job_type === 'runup')
@@ -345,6 +358,18 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
           </Button>
         </div>
       </div>
+
+      {isInvoiced && (
+        <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-purple-400">
+            <AlertCircle className="w-4 h-4" />
+            This billing cycle is <strong>invoiced</strong> and locked. Editing is disabled.
+          </div>
+          <Button size="sm" variant="outline" onClick={unlockCycle} className="border-purple-500/40 text-purple-400 hover:bg-purple-500/10">
+            Unlock
+          </Button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* LEFT — Invoice Breakdown */}

@@ -24,6 +24,8 @@ interface Job {
   scheduled_date: string | null
   po_number: string | null
   notes: string | null
+  client_reference: string | null
+  parent_job_id: string | null
   created_at: string | null
   clients?: { name: string } | null
   end_customers?: { name: string } | null
@@ -49,6 +51,7 @@ export function JobsClient({ initialJobs, count }: Props) {
   // Filter state
   const [filterType, setFilterType] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [filterClientRef, setFilterClientRef] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [loadingAll, setLoadingAll] = useState(false)
 
@@ -71,6 +74,7 @@ export function JobsClient({ initialJobs, count }: Props) {
   const filtered = jobs.filter((j) => {
     if (filterType && j.job_type !== filterType) return false
     if (filterStatus && j.status !== filterStatus) return false
+    if (filterClientRef && !(j.client_reference ?? '').toLowerCase().includes(filterClientRef.toLowerCase())) return false
     return true
   })
 
@@ -169,15 +173,22 @@ export function JobsClient({ initialJobs, count }: Props) {
             <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
           ))}
         </select>
-        {(filterType || filterStatus) && (
+        <input
+          type="text"
+          value={filterClientRef}
+          onChange={(e) => setFilterClientRef(e.target.value)}
+          placeholder="Client ref..."
+          className="h-8 w-32 rounded-lg border border-[#2a2d3e] bg-[#1a1d27] text-xs text-[#f1f5f9] px-2.5 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-[#94a3b8]/60"
+        />
+        {(filterType || filterStatus || filterClientRef) && (
           <button
-            onClick={() => { setFilterType(''); setFilterStatus('') }}
+            onClick={() => { setFilterType(''); setFilterStatus(''); setFilterClientRef('') }}
             className="text-xs text-orange-400 hover:text-orange-300 transition"
           >
             Clear filters
           </button>
         )}
-        {(filterType || filterStatus) && (
+        {(filterType || filterStatus || filterClientRef) && (
           <span className="text-xs text-[#94a3b8]">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
         )}
       </div>

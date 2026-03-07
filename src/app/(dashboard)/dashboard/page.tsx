@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/table'
 import { formatDate, jobTypeLabel, formatCurrency } from '@/lib/utils'
 import { getClientColor, BILLING_CLIENTS } from '@/lib/client-colors'
+import { RevenueChart } from '@/components/RevenueChart'
 
 interface StatCardProps {
   label: string
@@ -183,6 +184,12 @@ export default async function DashboardPage() {
           iconColor="text-cyan-400"
         />
       </div>
+
+      {/* Revenue Chart */}
+      <Card className="p-5">
+        <h2 className="text-base font-semibold text-[#f1f5f9] mb-4">Revenue by Client</h2>
+        <RevenueChart />
+      </Card>
 
       {/* Open Billing Cycles — one card per billing client */}
       {openCycles && openCycles.length > 0 && (() => {

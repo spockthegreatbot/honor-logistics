@@ -44,6 +44,7 @@ export function NewJobSlideOver({ onClose, onCreated }: Props) {
     scheduled_date: '',
     assigned_to: '',
     po_number: '',
+    client_reference: '',
     notes: '',
   })
 
@@ -234,6 +235,18 @@ export function NewJobSlideOver({ onClose, onCreated }: Props) {
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Client Reference */}
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-[#94a3b8] mb-1.5">
+                Client Reference
+              </label>
+              <Input
+                placeholder="e.g. CR-12345"
+                value={form.client_reference}
+                onChange={(e) => set('client_reference', e.target.value)}
+              />
             </div>
 
             {/* PO Number */}

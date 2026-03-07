@@ -31,6 +31,8 @@ interface Job {
   client_id: string | null
   end_customer_id: string | null
   assigned_to: string | null
+  client_reference: string | null
+  parent_job_id: string | null
   created_at: string | null
   updated_at: string | null
   clients?: { name: string } | null
@@ -70,6 +72,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
   const [status, setStatus] = useState('')
   const [scheduledDate, setScheduledDate] = useState('')
   const [poNumber, setPoNumber] = useState('')
+  const [clientReference, setClientReference] = useState('')
   const [clientId, setClientId] = useState('')
   const [endCustomerId, setEndCustomerId] = useState('')
   const [assignedTo, setAssignedTo] = useState('')
@@ -87,6 +90,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         setStatus(j.status ?? '')
         setScheduledDate(j.scheduled_date ?? '')
         setPoNumber(j.po_number ?? '')
+        setClientReference(j.client_reference ?? '')
         setClientId(j.client_id ?? '')
         setEndCustomerId(j.end_customer_id ?? '')
         setAssignedTo(j.assigned_to ?? '')
@@ -126,6 +130,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
           status,
           scheduled_date: scheduledDate || null,
           po_number: poNumber || null,
+          client_reference: clientReference || null,
           client_id: clientId || null,
           end_customer_id: endCustomerId || null,
           assigned_to: assignedTo || null,
@@ -287,6 +292,16 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                   />
                 </div>
                 <div>
+                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Client Ref</p>
+                  <input
+                    type="text"
+                    value={clientReference}
+                    onChange={e => setClientReference(e.target.value)}
+                    placeholder="—"
+                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+                <div>
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Assigned To</p>
                   <select
                     value={assignedTo}
@@ -298,6 +313,19 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                   </select>
                 </div>
               </div>
+
+              {/* Parent Job link */}
+              {job.parent_job_id && (
+                <div className="rounded-lg bg-[#1e2130] border border-[#2a2d3e] px-4 py-2.5 flex items-center gap-2">
+                  <span className="text-xs text-[#94a3b8]">Bundle:</span>
+                  <button
+                    onClick={() => { onClose(); setTimeout(() => onJobUpdated?.({ ...job }), 100) }}
+                    className="text-xs font-mono font-medium text-orange-400 hover:text-orange-300 transition"
+                  >
+                    Parent Job
+                  </button>
+                </div>
+              )}
 
               {/* Status update */}
               <div>

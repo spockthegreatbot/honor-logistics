@@ -13,6 +13,19 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
   const { id } = await params
   const supabase = await createClient()
 
+  // Check if cycle is invoiced
+  const { data: cycleCheck } = await supabase
+    .from('billing_cycles')
+    .select('status')
+    .eq('id', id)
+    .single()
+  if (cycleCheck?.status === 'invoiced') {
+    return NextResponse.json(
+      { error: 'Billing cycle is invoiced — contact admin to unlock' },
+      { status: 423 }
+    )
+  }
+
   // Fetch all jobs in this cycle
   const { data: jobs } = await supabase
     .from('jobs')

@@ -11,7 +11,7 @@ const statusEmoji: Record<string, string> = {
 
 const JOB_PATCH_FIELDS = [
   'status', 'assigned_to', 'scheduled_date', 'notes', 'po_number', 'client_id', 'end_customer_id',
-  'billing_cycle_id', 'completed_at',
+  'billing_cycle_id', 'completed_at', 'client_reference', 'parent_job_id',
 ]
 
 export async function PATCH(
@@ -25,6 +25,26 @@ export async function PATCH(
     const supabase = await createClient()
     const { id } = await params
     const body = await request.json()
+
+    // Check if job belongs to an invoiced billing cycle
+    const { data: jobCheck } = await supabase
+      .from('jobs')
+      .select('billing_cycle_id')
+      .eq('id', id)
+      .single()
+    if (jobCheck?.billing_cycle_id) {
+      const { data: cycle } = await supabase
+        .from('billing_cycles')
+        .select('status')
+        .eq('id', jobCheck.billing_cycle_id)
+        .single()
+      if (cycle?.status === 'invoiced') {
+        return NextResponse.json(
+          { error: 'Billing cycle is invoiced — contact admin to unlock' },
+          { status: 423 }
+        )
+      }
+    }
 
     const update = Object.fromEntries(
       Object.entries(body).filter(([k]) => JOB_PATCH_FIELDS.includes(k))
