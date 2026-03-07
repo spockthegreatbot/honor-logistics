@@ -7,6 +7,7 @@ export async function middleware(request: NextRequest) {
   // Skip auth for public routes
   if (
     pathname.startsWith('/api/telegram') ||
+    pathname.startsWith('/api/email/poll') ||
     pathname.startsWith('/auth/callback')
   ) {
     return
