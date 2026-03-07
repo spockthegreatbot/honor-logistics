@@ -70,7 +70,7 @@ export default function EmailsPage() {
           <h1 className="text-lg font-semibold flex items-center gap-2">
             <Mail className="h-5 w-5" /> Inbox
           </h1>
-          <Button size="sm" variant="outline" onClick={triggerPoll} disabled={polling}>
+          <Button size="sm" variant="default" onClick={triggerPoll} disabled={polling}>
             <RefreshCw className={`h-4 w-4 mr-1 ${polling ? 'animate-spin' : ''}`} />
             {polling ? 'Fetching…' : 'Check Mail'}
           </Button>
@@ -95,7 +95,7 @@ export default function EmailsPage() {
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <span className="text-sm font-medium truncate">{e.from_address}</span>
                   {e.clients?.name && (
-                    <Badge variant="secondary" className="text-xs shrink-0">
+                    <Badge variant="default" className="text-xs shrink-0">
                       {e.clients.name}
                     </Badge>
                   )}

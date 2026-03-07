@@ -37,8 +37,9 @@ export async function fetchUnreadEmails(): Promise<ParsedEmail[]> {
         bodyStructure: true,
         source: true,
       })) {
-        const from = msg.envelope.from?.[0]
-        const fromAddress = from ? `${from.mailbox}@${from.host}` : 'unknown'
+        const envelope = msg.envelope
+        const from = envelope?.from?.[0]
+        const fromAddress = from?.address ?? 'unknown'
         const fromName = from?.name ?? fromAddress
 
         const raw = msg.source?.toString() ?? ''
@@ -47,12 +48,12 @@ export async function fetchUnreadEmails(): Promise<ParsedEmail[]> {
 
         emails.push({
           uid: msg.uid,
-          messageId: msg.envelope.messageId ?? String(msg.uid),
+          messageId: envelope?.messageId ?? String(msg.uid),
           from: fromAddress,
           fromName,
-          subject: msg.envelope.subject ?? '(no subject)',
+          subject: envelope?.subject ?? '(no subject)',
           body,
-          receivedAt: msg.envelope.date ?? new Date(),
+          receivedAt: envelope?.date ?? new Date(),
           raw,
         })
       }
