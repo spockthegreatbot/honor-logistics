@@ -45,21 +45,26 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
   let total_toner = 0
 
   for (const job of jobs ?? []) {
-    const runup = job.runup_details as { unit_price?: number } | null
-    const install = job.install_details as { unit_price?: number } | null
-    const delivery = job.delivery_details as { base_price?: number; fuel_surcharge_amt?: number; fuel_override?: boolean } | null
-    const toner = job.toner_orders as { total_price?: number }[] | null
+    // Supabase returns related rows as arrays — take first element for 1:1 relations
+    const runupArr = Array.isArray(job.runup_details) ? job.runup_details : (job.runup_details ? [job.runup_details] : [])
+    const installArr = Array.isArray(job.install_details) ? job.install_details : (job.install_details ? [job.install_details] : [])
+    const deliveryArr = Array.isArray(job.delivery_details) ? job.delivery_details : (job.delivery_details ? [job.delivery_details] : [])
+    const tonerArr = Array.isArray(job.toner_orders) ? job.toner_orders : []
 
-    if (runup?.unit_price) total_runup += Number(runup.unit_price)
-    if (install?.unit_price) total_install += Number(install.unit_price)
-    if (delivery?.base_price) total_delivery += Number(delivery.base_price)
-    if (delivery && !delivery.fuel_override && delivery.fuel_surcharge_amt) {
-      total_fuel_surcharge += Number(delivery.fuel_surcharge_amt)
+    for (const runup of runupArr as { unit_price?: number }[]) {
+      if (runup?.unit_price) total_runup += Number(runup.unit_price)
     }
-    if (Array.isArray(toner)) {
-      for (const t of toner) {
-        if (t.total_price) total_toner += Number(t.total_price)
+    for (const install of installArr as { unit_price?: number }[]) {
+      if (install?.unit_price) total_install += Number(install.unit_price)
+    }
+    for (const delivery of deliveryArr as { base_price?: number; fuel_surcharge_amt?: number; fuel_override?: boolean }[]) {
+      if (delivery?.base_price) total_delivery += Number(delivery.base_price)
+      if (delivery && !delivery.fuel_override && delivery.fuel_surcharge_amt) {
+        total_fuel_surcharge += Number(delivery.fuel_surcharge_amt)
       }
+    }
+    for (const t of tonerArr as { total_price?: number }[]) {
+      if (t.total_price) total_toner += Number(t.total_price)
     }
   }
 

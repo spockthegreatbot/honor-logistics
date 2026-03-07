@@ -47,14 +47,15 @@ interface JobRecord {
   clients: { id: string; name: string } | null
   end_customers: { id: string; name: string } | null
   machines: { id: string; model: string; make: string | null } | null
-  runup_details: { unit_price: number | null } | null
-  install_details: { unit_price: number | null } | null
+  // Supabase returns related rows as arrays even for 1:1 relations
+  runup_details: { unit_price: number | null }[] | null
+  install_details: { unit_price: number | null }[] | null
   delivery_details: {
     base_price: number | null
     fuel_surcharge_amt: number | null
     fuel_override: boolean | null
     subtype: string | null
-  } | null
+  }[] | null
   toner_orders: { total_price: number | null }[] | null
 }
 
@@ -449,7 +450,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                             </td>
                             <td className="px-4 py-2 text-xs text-[#94a3b8] hidden sm:table-cell">{formatDate(job.scheduled_date)}</td>
                             <td className="px-4 py-2 text-right font-mono text-sm text-[#f1f5f9]">
-                              {formatCurrency(job.runup_details?.unit_price)}
+                              {formatCurrency(Array.isArray(job.runup_details) ? (job.runup_details[0]?.unit_price ?? 0) : 0)}
                             </td>
                           </tr>
                         ))}
@@ -458,7 +459,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                         <tr className="border-t border-[#2a2d3e] bg-[#1a1d27]">
                           <td colSpan={3} className="px-4 py-2 text-xs text-[#94a3b8] font-medium">Total</td>
                           <td className="px-4 py-2 text-right font-semibold text-orange-400 font-mono">
-                            {formatCurrency(runupJobs.reduce((s, j) => s + (j.runup_details?.unit_price ?? 0), 0))}
+                            {formatCurrency(runupJobs.reduce((s, j) => s + (Array.isArray(j.runup_details) ? (j.runup_details[0]?.unit_price ?? 0) : 0), 0))}
                           </td>
                         </tr>
                       </tfoot>
@@ -489,16 +490,16 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                         {deliveryJobs.map(job => (
                           <tr key={job.id} className="hover:bg-[#1a1d27]">
                             <td className="px-4 py-2 font-mono text-xs text-orange-400">{job.job_number || '—'}</td>
-                            <td className="px-4 py-2 text-xs text-[#94a3b8] capitalize">{job.delivery_details?.subtype || job.job_type}</td>
+                            <td className="px-4 py-2 text-xs text-[#94a3b8] capitalize">{(Array.isArray(job.delivery_details) ? job.delivery_details[0]?.subtype : null) || job.job_type}</td>
                             <td className="px-4 py-2 text-xs text-[#94a3b8] hidden sm:table-cell">{formatDate(job.scheduled_date)}</td>
                             <td className="px-4 py-2 text-right font-mono text-sm text-[#f1f5f9]">
-                              {formatCurrency(job.delivery_details?.base_price)}
+                              {formatCurrency(Array.isArray(job.delivery_details) ? (job.delivery_details[0]?.base_price ?? 0) : 0)}
                             </td>
                             <td className="px-4 py-2 text-right font-mono text-xs text-[#94a3b8]">
-                              {job.delivery_details?.fuel_override ? (
+                              {Array.isArray(job.delivery_details) && job.delivery_details[0]?.fuel_override ? (
                                 <span className="text-[#64748b] text-xs">FP</span>
                               ) : (
-                                formatCurrency(job.delivery_details?.fuel_surcharge_amt)
+                                formatCurrency(Array.isArray(job.delivery_details) ? (job.delivery_details[0]?.fuel_surcharge_amt ?? 0) : 0)
                               )}
                             </td>
                           </tr>
@@ -508,10 +509,10 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                         <tr className="border-t border-[#2a2d3e] bg-[#1a1d27]">
                           <td colSpan={3} className="px-4 py-2 text-xs text-[#94a3b8] font-medium">Total</td>
                           <td className="px-4 py-2 text-right font-semibold text-orange-400 font-mono">
-                            {formatCurrency(deliveryJobs.reduce((s, j) => s + (j.delivery_details?.base_price ?? 0), 0))}
+                            {formatCurrency(deliveryJobs.reduce((s, j) => s + (Array.isArray(j.delivery_details) ? (j.delivery_details[0]?.base_price ?? 0) : 0), 0))}
                           </td>
                           <td className="px-4 py-2 text-right text-xs text-[#94a3b8] font-mono">
-                            {formatCurrency(deliveryJobs.reduce((s, j) => s + (!j.delivery_details?.fuel_override ? (j.delivery_details?.fuel_surcharge_amt ?? 0) : 0), 0))}
+                            {formatCurrency(deliveryJobs.reduce((s, j) => s + (Array.isArray(j.delivery_details) && !j.delivery_details[0]?.fuel_override ? (j.delivery_details[0]?.fuel_surcharge_amt ?? 0) : 0), 0))}
                           </td>
                         </tr>
                       </tfoot>
@@ -544,7 +545,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                             <td className="px-4 py-2 text-xs text-[#f1f5f9]">{job.end_customers?.name || '—'}</td>
                             <td className="px-4 py-2 text-xs text-[#94a3b8] hidden sm:table-cell">{formatDate(job.scheduled_date)}</td>
                             <td className="px-4 py-2 text-right font-mono text-sm text-[#f1f5f9]">
-                              {formatCurrency(job.install_details?.unit_price)}
+                              {formatCurrency(Array.isArray(job.install_details) ? (job.install_details[0]?.unit_price ?? 0) : 0)}
                             </td>
                           </tr>
                         ))}
@@ -553,7 +554,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                         <tr className="border-t border-[#2a2d3e] bg-[#1a1d27]">
                           <td colSpan={3} className="px-4 py-2 text-xs text-[#94a3b8] font-medium">Total</td>
                           <td className="px-4 py-2 text-right font-semibold text-orange-400 font-mono">
-                            {formatCurrency(installJobs.reduce((s, j) => s + (j.install_details?.unit_price ?? 0), 0))}
+                            {formatCurrency(installJobs.reduce((s, j) => s + (Array.isArray(j.install_details) ? (j.install_details[0]?.unit_price ?? 0) : 0), 0))}
                           </td>
                         </tr>
                       </tfoot>
@@ -765,9 +766,9 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                   </thead>
                   <tbody className="divide-y divide-[#2a2d3e]">
                     {availableJobs.map(job => {
-                      const amount = job.runup_details?.unit_price
-                        ?? job.install_details?.unit_price
-                        ?? job.delivery_details?.base_price
+                      const amount = (Array.isArray(job.runup_details) ? job.runup_details[0]?.unit_price : null)
+                        ?? (Array.isArray(job.install_details) ? job.install_details[0]?.unit_price : null)
+                        ?? (Array.isArray(job.delivery_details) ? job.delivery_details[0]?.base_price : null)
                         ?? 0
                       return (
                         <tr
