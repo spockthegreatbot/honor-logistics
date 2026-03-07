@@ -10,7 +10,7 @@ const statusEmoji: Record<string, string> = {
 }
 
 const JOB_PATCH_FIELDS = [
-  'status', 'assigned_to', 'scheduled_date', 'notes', 'po_number',
+  'status', 'assigned_to', 'scheduled_date', 'notes', 'po_number', 'client_id', 'end_customer_id',
   'billing_cycle_id', 'completed_at',
 ]
 

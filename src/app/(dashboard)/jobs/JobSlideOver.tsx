@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Clock, CheckCircle2, AlertCircle, ChevronRight, Loader2 } from 'lucide-react'
+import { X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatDate, jobTypeLabel, jobStatusLabel } from '@/lib/utils'
@@ -28,6 +28,9 @@ interface Job {
   scheduled_date: string | null
   po_number: string | null
   notes: string | null
+  client_id: string | null
+  end_customer_id: string | null
+  assigned_to: string | null
   created_at: string | null
   updated_at: string | null
   clients?: { name: string } | null
@@ -35,6 +38,8 @@ interface Job {
   staff?: { name: string } | null
   runup_details?: RunupDetails | null
 }
+
+interface SelectOption { id: string; name: string }
 
 const RUNUP_CHECKS: Array<{ key: keyof RunupDetails; label: string }> = [
   { key: 'check_power_on',         label: 'Power On' },
@@ -64,6 +69,13 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState('')
   const [scheduledDate, setScheduledDate] = useState('')
+  const [poNumber, setPoNumber] = useState('')
+  const [clientId, setClientId] = useState('')
+  const [endCustomerId, setEndCustomerId] = useState('')
+  const [assignedTo, setAssignedTo] = useState('')
+  const [clients, setClients] = useState<SelectOption[]>([])
+  const [endCustomers, setEndCustomers] = useState<SelectOption[]>([])
+  const [staffList, setStaffList] = useState<SelectOption[]>([])
 
   const fetchJob = useCallback(async () => {
     try {
@@ -74,6 +86,10 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         setNotes(j.notes ?? '')
         setStatus(j.status ?? '')
         setScheduledDate(j.scheduled_date ?? '')
+        setPoNumber(j.po_number ?? '')
+        setClientId(j.client_id ?? '')
+        setEndCustomerId(j.end_customer_id ?? '')
+        setAssignedTo(j.assigned_to ?? '')
       }
     } catch (e) {
       console.error(e)
@@ -86,6 +102,18 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
     fetchJob()
   }, [fetchJob])
 
+  useEffect(() => {
+    fetch('/api/meta')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { clients?: SelectOption[]; end_customers?: SelectOption[]; staff?: SelectOption[] } | null) => {
+        if (!d) return
+        setClients(d.clients ?? [])
+        setEndCustomers(d.end_customers ?? [])
+        setStaffList(d.staff ?? [])
+      })
+      .catch(console.error)
+  }, [])
+
   async function handleSave() {
     if (!job) return
     setSaving(true)
@@ -93,7 +121,15 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes, status, scheduled_date: scheduledDate || null }),
+        body: JSON.stringify({
+          notes,
+          status,
+          scheduled_date: scheduledDate || null,
+          po_number: poNumber || null,
+          client_id: clientId || null,
+          end_customer_id: endCustomerId || null,
+          assigned_to: assignedTo || null,
+        }),
       })
       if (res.ok) {
         const { job: updated } = await res.json()
@@ -216,23 +252,50 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Client</p>
-                  <p className="text-sm font-medium text-[#f1f5f9]">{job.clients?.name ?? '—'}</p>
+                  <select
+                    value={clientId}
+                    onChange={e => setClientId(e.target.value)}
+                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="">— None —</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Customer</p>
-                  <p className="text-sm font-medium text-[#f1f5f9]">{job.end_customers?.name ?? '—'}</p>
+                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">End Customer</p>
+                  <select
+                    value={endCustomerId}
+                    onChange={e => setEndCustomerId(e.target.value)}
+                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="">— None —</option>
+                    {endCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Serial</p>
-                  <p className="text-sm font-mono text-[#f1f5f9]">{job.serial_number ?? '—'}</p>
+                  <p className="text-sm font-mono text-[#f1f5f9] py-1">{job.serial_number ?? '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">PO #</p>
-                  <p className="text-sm font-medium text-[#f1f5f9]">{job.po_number ?? '—'}</p>
+                  <input
+                    type="text"
+                    value={poNumber}
+                    onChange={e => setPoNumber(e.target.value)}
+                    placeholder="—"
+                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Assigned To</p>
-                  <p className="text-sm font-medium text-[#f1f5f9]">{job.staff?.name ?? '—'}</p>
+                  <select
+                    value={assignedTo}
+                    onChange={e => setAssignedTo(e.target.value)}
+                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="">— Unassigned —</option>
+                    {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
                 </div>
               </div>
 
