@@ -54,7 +54,7 @@ export async function PATCH(
       .from('jobs')
       .update({ ...update, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .select('*, clients(name), end_customers(name), staff:assigned_to(name), runup_details(*)')
+      .select('*, clients(name), end_customers(name, address, contact_name, contact_phone), staff:assigned_to(name), machines(model, make, machine_type), runup_details(*), delivery_details(*), install_details(*)')
       .single()
 
     if (error) {
@@ -91,7 +91,7 @@ export async function GET(
 
     const { data: job, error } = await supabase
       .from('jobs')
-      .select('*, clients(name), end_customers(name), staff:assigned_to(name), runup_details(*)')
+      .select('*, clients(name), end_customers(name, address, contact_name, contact_phone), staff:assigned_to(name), machines(model, make, machine_type), runup_details(*), delivery_details(*), install_details(*)')
       .eq('id', id)
       .single()
 

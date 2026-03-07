@@ -19,6 +19,22 @@ interface RunupDetails {
   signed_off_at: string | null
 }
 
+interface DeliveryDetails {
+  id: string
+  subtype: string | null
+  from_address: string | null
+  to_address: string | null
+  delivery_notes: string | null
+}
+
+interface InstallDetails {
+  id: string
+  install_type: string | null
+  fma_required: boolean | null
+  papercut_required: boolean | null
+  fma_notes: string | null
+}
+
 interface Job {
   id: string
   job_number: string | null
@@ -36,8 +52,11 @@ interface Job {
   created_at: string | null
   updated_at: string | null
   clients?: { name: string } | null
-  end_customers?: { name: string } | null
+  end_customers?: { name: string; address?: string | null; contact_name?: string | null; contact_phone?: string | null } | null
   staff?: { name: string } | null
+  machines?: { model: string | null; make: string | null; machine_type: string | null } | null
+  delivery_details?: DeliveryDetails[] | null
+  install_details?: InstallDetails[] | null
   runup_details?: RunupDetails | null
 }
 
@@ -281,6 +300,12 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Serial</p>
                   <p className="text-sm font-mono text-[#f1f5f9] py-1">{job.serial_number ?? '—'}</p>
                 </div>
+                {job.machines?.model && (
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Machine</p>
+                    <p className="text-sm text-[#f1f5f9] py-1">{job.machines.model}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">PO #</p>
                   <input
@@ -313,6 +338,81 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                   </select>
                 </div>
               </div>
+
+              {/* Contact info from end customer */}
+              {(job.end_customers?.contact_name || job.end_customers?.contact_phone || job.end_customers?.address) && (
+                <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">Site Contact</p>
+                  {job.end_customers?.contact_name && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-[#94a3b8] w-16 shrink-0">Name</span>
+                      <span className="text-sm text-[#f1f5f9]">{job.end_customers.contact_name}</span>
+                    </div>
+                  )}
+                  {job.end_customers?.contact_phone && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-[#94a3b8] w-16 shrink-0">Phone</span>
+                      <a href={`tel:${job.end_customers.contact_phone}`} className="text-sm text-orange-400 hover:text-orange-300 transition">
+                        {job.end_customers.contact_phone}
+                      </a>
+                    </div>
+                  )}
+                  {job.end_customers?.address && (
+                    <div className="flex items-start gap-3">
+                      <span className="text-xs text-[#94a3b8] w-16 shrink-0 mt-0.5">Address</span>
+                      <span className="text-sm text-[#f1f5f9]">{job.end_customers.address}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Delivery / Relocation addresses */}
+              {job.delivery_details && job.delivery_details.length > 0 && (job.delivery_details[0].from_address || job.delivery_details[0].to_address) && (
+                <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">
+                    {job.delivery_details[0].subtype === 'relocation' ? 'Relocation Addresses' : 'Delivery Addresses'}
+                  </p>
+                  {job.delivery_details[0].from_address && (
+                    <div className="flex items-start gap-3">
+                      <span className="text-xs font-medium text-red-400 w-10 shrink-0 mt-0.5">FROM</span>
+                      <span className="text-sm text-[#f1f5f9]">{job.delivery_details[0].from_address}</span>
+                    </div>
+                  )}
+                  {job.delivery_details[0].to_address && (
+                    <div className="flex items-start gap-3">
+                      <span className="text-xs font-medium text-green-400 w-10 shrink-0 mt-0.5">TO</span>
+                      <span className="text-sm text-[#f1f5f9]">{job.delivery_details[0].to_address}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Install details */}
+              {job.install_details && job.install_details.length > 0 && (
+                <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">Install Details</p>
+                  <div className="flex flex-wrap gap-2">
+                    {job.install_details[0].install_type && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-[#2a2d3e] text-[#f1f5f9]">
+                        {job.install_details[0].install_type}
+                      </span>
+                    )}
+                    {job.install_details[0].fma_required && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300 font-medium">
+                        ⚠️ FMA Required
+                      </span>
+                    )}
+                    {job.install_details[0].papercut_required && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 font-medium">
+                        PaperCut Required
+                      </span>
+                    )}
+                  </div>
+                  {job.install_details[0].fma_notes && (
+                    <p className="text-xs text-[#94a3b8]">{job.install_details[0].fma_notes}</p>
+                  )}
+                </div>
+              )}
 
               {/* Parent Job link */}
               {job.parent_job_id && (
