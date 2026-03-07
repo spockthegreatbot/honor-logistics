@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
   const clientId = searchParams.get('client_id')
   const status = searchParams.get('status')
 
+  const showAll = searchParams.get('show_all') === '1'
+
   let query = supabase
     .from('jobs')
     .select(
@@ -21,7 +23,15 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false })
 
   if (clientId && clientId !== 'all') query = query.eq('client_id', clientId)
-  if (status && status !== 'all') query = query.eq('status', status)
+  if (status && status !== 'all') {
+    query = query.eq('status', status)
+  } else if (!showAll) {
+    // Default: exclude completed/invoiced/cancelled to show active jobs only
+    query = query.not('status', 'in', '(complete,invoiced,cancelled)')
+  }
+
+  // Pagination safety
+  query = query.range(0, 499)
 
   const { data, error, count } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

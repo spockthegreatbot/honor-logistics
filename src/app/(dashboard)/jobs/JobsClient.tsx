@@ -49,6 +49,24 @@ export function JobsClient({ initialJobs, count }: Props) {
   // Filter state
   const [filterType, setFilterType] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [showAll, setShowAll] = useState(false)
+  const [loadingAll, setLoadingAll] = useState(false)
+
+  async function toggleShowAll() {
+    const next = !showAll
+    setShowAll(next)
+    setLoadingAll(true)
+    try {
+      const url = next ? '/api/jobs?show_all=1' : '/api/jobs'
+      const res = await fetch(url)
+      if (res.ok) {
+        const json = await res.json()
+        setJobs(json.data ?? [])
+      }
+    } finally {
+      setLoadingAll(false)
+    }
+  }
 
   const filtered = jobs.filter((j) => {
     if (filterType && j.job_type !== filterType) return false
@@ -116,6 +134,17 @@ export function JobsClient({ initialJobs, count }: Props) {
 
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={toggleShowAll}
+          disabled={loadingAll}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+            showAll
+              ? 'border-orange-500/50 bg-orange-500/10 text-orange-400'
+              : 'border-[#2a2d3e] text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e]'
+          }`}
+        >
+          {loadingAll ? 'Loading...' : showAll ? 'Showing all jobs' : 'Show all jobs'}
+        </button>
         <div className="flex items-center gap-1.5 text-xs text-[#94a3b8]">
           <Filter className="w-3.5 h-3.5" />
           Filter:
