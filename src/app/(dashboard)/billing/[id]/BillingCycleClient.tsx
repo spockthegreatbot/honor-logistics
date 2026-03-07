@@ -283,10 +283,6 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
     return rule?.unit_price ?? 0
   }
 
-  const netAmount = totals.subtotal - (parseFloat(discount) || 0)
-  const gstAmount = netAmount * 0.1
-  const grandTotal = netAmount + gstAmount
-
   return (
     <div className="p-4 sm:p-6 space-y-5">
       {/* Header */}
@@ -327,15 +323,12 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
           <Card className="p-5 sticky top-4">
             <h2 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-3">Invoice Breakdown</h2>
 
-            <LineItem label="Machine Run-Ups" amount={totals.total_runup} />
-            <LineItem label="Delivery + Collection" amount={totals.total_delivery} />
-            <LineItem label="Fuel Surcharge (11%)" amount={totals.total_fuel_surcharge} indent />
+            <LineItem label="Machine Run Ups" amount={totals.total_runup} />
+            <LineItem label="Delivery & Collection" amount={totals.total_delivery} />
+            <LineItem label="Fuel Surcharge 11%" amount={totals.total_fuel_surcharge} indent />
             <LineItem label="Machine Install" amount={totals.total_install} />
             <LineItem label="Storage + Misc" amount={totals.total_storage} />
-            <LineItem label="Toner Orders" amount={totals.total_toner} />
-
-            <Divider />
-            <LineItem label="Subtotal" amount={totals.subtotal} bold />
+            {totals.total_toner > 0 && <LineItem label="Toner Orders" amount={totals.total_toner} />}
 
             {/* Discount */}
             <div className="flex justify-between items-center py-1.5">
@@ -355,13 +348,13 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
             </div>
 
             <Divider />
-            <LineItem label="Net" amount={netAmount} bold />
-            <LineItem label="GST (10%)" amount={gstAmount} />
+            <LineItem label="Subtotal ex GST" amount={totals.subtotal} bold />
+            <LineItem label="GST 10%" amount={totals.gst_amount} />
 
             <Divider />
             <div className="flex justify-between items-center py-2">
-              <span className="text-base font-bold text-[#f1f5f9]">GRAND TOTAL</span>
-              <span className="text-base font-bold text-orange-400 font-mono">{formatCurrency(grandTotal)}</span>
+              <span className="text-base font-bold text-[#f1f5f9]">TOTAL AUD</span>
+              <span className="text-base font-bold text-orange-400 font-mono">{formatCurrency(totals.grand_total)}</span>
             </div>
 
             {/* Xero placeholder */}
@@ -836,11 +829,11 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-[#94a3b8]">GST (10%)</span>
-                <span className="font-mono text-[#f1f5f9]">{formatCurrency(gstAmount)}</span>
+                <span className="font-mono text-[#f1f5f9]">{formatCurrency(totals.gst_amount)}</span>
               </div>
               <div className="flex justify-between font-bold pt-1 border-t border-[#2a2d3e]">
                 <span className="text-[#f1f5f9]">Grand Total</span>
-                <span className="font-mono text-orange-400">{formatCurrency(grandTotal)}</span>
+                <span className="font-mono text-orange-400">{formatCurrency(totals.grand_total)}</span>
               </div>
             </div>
 

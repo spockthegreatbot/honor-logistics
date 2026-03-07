@@ -27,28 +27,17 @@ export default async function InvoicePreviewPage({ params }: PageProps) {
 
   if (error || !cycle) notFound()
 
-  const { data: jobs } = await supabase
-    .from('jobs')
-    .select('*, end_customers(name)')
-    .eq('billing_cycle_id', id)
-    .order('job_type')
-    .order('scheduled_date')
-
-  const allJobs = jobs ?? []
-
-  // Group jobs by type
-  const runups = allJobs.filter((j) => j.job_type === 'runup')
-  const deliveries = allJobs.filter((j) => j.job_type === 'delivery' || j.job_type === 'collection')
-  const installs = allJobs.filter((j) => j.job_type === 'install')
-  const others = allJobs.filter((j) => !['runup', 'delivery', 'collection', 'install'].includes(j.job_type))
-
   const clientName = (cycle as { clients?: { name: string } | null }).clients?.name ?? 'Client'
 
+  const totalRunup = cycle.total_runup ?? 0
+  const totalDelivery = cycle.total_delivery ?? 0
+  const totalFuelSurcharge = cycle.total_fuel_surcharge ?? 0
+  const totalInstall = cycle.total_install ?? 0
+  const totalStorage = cycle.total_storage ?? 0
+  const discount = cycle.discount_amount ?? 0
   const subtotal = cycle.subtotal ?? 0
   const gst = cycle.gst_amount ?? (subtotal * 0.1)
   const grandTotal = cycle.grand_total ?? (subtotal + gst)
-  const discount = cycle.discount_amount ?? 0
-  const fuelSurcharge = cycle.total_fuel_surcharge ?? 0
 
   const invoiceNumber = cycle.xero_invoice_number ?? cycle.cycle_name ?? `INV-${id.slice(0, 6).toUpperCase()}`
   const invoiceDate = formatDate(cycle.period_end)
@@ -108,102 +97,46 @@ export default async function InvoicePreviewPage({ params }: PageProps) {
             </tr>
           </thead>
           <tbody>
-            {/* Run Ups */}
-            {runups.length > 0 && (
-              <>
-                <tr>
-                  <td colSpan={4} className="pt-4 pb-1 font-bold text-gray-700">Run Ups</td>
-                </tr>
-                {runups.map((j) => {
-                  const price = (j as { runup_details?: { unit_price?: number | null } | null }).runup_details?.unit_price ?? 0
-                  return (
-                    <tr key={j.id} className="border-b border-gray-200">
-                      <td className="py-1.5">
-                        Run Up - {(j as { end_customers?: { name: string } | null }).end_customers?.name ?? j.serial_number ?? j.job_number}
-                      </td>
-                      <td className="text-center py-1.5">1</td>
-                      <td className="text-right py-1.5">{formatCurrency(price)}</td>
-                      <td className="text-right py-1.5">{formatCurrency(price)}</td>
-                    </tr>
-                  )
-                })}
-              </>
-            )}
-
-            {/* Delivery + Collection */}
-            {deliveries.length > 0 && (
-              <>
-                <tr>
-                  <td colSpan={4} className="pt-4 pb-1 font-bold text-gray-700">Delivery &amp; Collection</td>
-                </tr>
-                {deliveries.map((j) => {
-                  const price = (j as { delivery_details?: { base_price?: number | null } | null }).delivery_details?.base_price ?? 0
-                  return (
-                    <tr key={j.id} className="border-b border-gray-200">
-                      <td className="py-1.5">
-                        {j.job_type === 'collection' ? 'Collection' : 'Delivery'} - {(j as { end_customers?: { name: string } | null }).end_customers?.name ?? j.job_number}
-                      </td>
-                      <td className="text-center py-1.5">1</td>
-                      <td className="text-right py-1.5">{formatCurrency(price)}</td>
-                      <td className="text-right py-1.5">{formatCurrency(price)}</td>
-                    </tr>
-                  )
-                })}
-              </>
-            )}
-
-            {/* Fuel Surcharge */}
-            {fuelSurcharge > 0 && (
+            {totalRunup > 0 && (
               <tr className="border-b border-gray-200">
-                <td className="py-1.5">Fuel Surcharge (11%)</td>
+                <td className="py-1.5">Machine Run Ups</td>
                 <td className="text-center py-1.5">1</td>
-                <td className="text-right py-1.5">{formatCurrency(fuelSurcharge)}</td>
-                <td className="text-right py-1.5">{formatCurrency(fuelSurcharge)}</td>
+                <td className="text-right py-1.5">{formatCurrency(totalRunup)}</td>
+                <td className="text-right py-1.5">{formatCurrency(totalRunup)}</td>
               </tr>
             )}
-
-            {/* Installs */}
-            {installs.length > 0 && (
-              <>
-                <tr>
-                  <td colSpan={4} className="pt-4 pb-1 font-bold text-gray-700">Install</td>
-                </tr>
-                {installs.map((j) => {
-                  const price = (j as { install_details?: { unit_price?: number | null } | null }).install_details?.unit_price ?? 0
-                  return (
-                    <tr key={j.id} className="border-b border-gray-200">
-                      <td className="py-1.5">
-                        Install - {(j as { end_customers?: { name: string } | null }).end_customers?.name ?? j.job_number}
-                      </td>
-                      <td className="text-center py-1.5">1</td>
-                      <td className="text-right py-1.5">{formatCurrency(price)}</td>
-                      <td className="text-right py-1.5">{formatCurrency(price)}</td>
-                    </tr>
-                  )
-                })}
-              </>
+            {totalDelivery > 0 && (
+              <tr className="border-b border-gray-200">
+                <td className="py-1.5">Delivery &amp; Collection</td>
+                <td className="text-center py-1.5">1</td>
+                <td className="text-right py-1.5">{formatCurrency(totalDelivery)}</td>
+                <td className="text-right py-1.5">{formatCurrency(totalDelivery)}</td>
+              </tr>
             )}
-
-            {/* Storage + Misc */}
-            {others.length > 0 && (
-              <>
-                <tr>
-                  <td colSpan={4} className="pt-4 pb-1 font-bold text-gray-700">Storage &amp; Misc</td>
-                </tr>
-                {others.map((j) => (
-                  <tr key={j.id} className="border-b border-gray-200">
-                    <td className="py-1.5">
-                      {j.job_type.replace(/_/g, ' ')} - {(j as { end_customers?: { name: string } | null }).end_customers?.name ?? j.job_number}
-                    </td>
-                    <td className="text-center py-1.5">1</td>
-                    <td className="text-right py-1.5">—</td>
-                    <td className="text-right py-1.5">—</td>
-                  </tr>
-                ))}
-              </>
+            {totalFuelSurcharge > 0 && (
+              <tr className="border-b border-gray-200">
+                <td className="py-1.5 pl-6 text-gray-600">Fuel Surcharge (11%)</td>
+                <td className="text-center py-1.5">1</td>
+                <td className="text-right py-1.5">{formatCurrency(totalFuelSurcharge)}</td>
+                <td className="text-right py-1.5">{formatCurrency(totalFuelSurcharge)}</td>
+              </tr>
             )}
-
-            {/* Discount */}
+            {totalInstall > 0 && (
+              <tr className="border-b border-gray-200">
+                <td className="py-1.5">Machine Install</td>
+                <td className="text-center py-1.5">1</td>
+                <td className="text-right py-1.5">{formatCurrency(totalInstall)}</td>
+                <td className="text-right py-1.5">{formatCurrency(totalInstall)}</td>
+              </tr>
+            )}
+            {totalStorage > 0 && (
+              <tr className="border-b border-gray-200">
+                <td className="py-1.5">Storage + Misc</td>
+                <td className="text-center py-1.5">1</td>
+                <td className="text-right py-1.5">{formatCurrency(totalStorage)}</td>
+                <td className="text-right py-1.5">{formatCurrency(totalStorage)}</td>
+              </tr>
+            )}
             {discount > 0 && (
               <tr className="border-b border-gray-200">
                 <td className="py-1.5 text-red-600">Discount</td>
