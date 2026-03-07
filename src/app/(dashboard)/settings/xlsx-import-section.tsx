@@ -171,7 +171,7 @@ export function XlsxImportSection({ billingCycles }: Props) {
         {/* Import button */}
         <Button
           onClick={handleImport}
-          disabled={!file || !cycleId || loading}
+          disabled={!file || loading}
           className="w-full"
           size="lg"
         >
