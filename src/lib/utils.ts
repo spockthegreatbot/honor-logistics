@@ -78,3 +78,17 @@ export function getInitials(name: string): string {
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('')
 }
+
+export function statusColor(status: string): string {
+  const map: Record<string, string> = {
+    complete:      'bg-green-500/20 text-green-300',
+    invoiced:      'bg-blue-500/20 text-blue-300',
+    cancelled:     'bg-red-500/20 text-red-300',
+    new:           'bg-slate-500/20 text-slate-300',
+    runup_pending: 'bg-amber-500/20 text-amber-300',
+    ready:         'bg-purple-500/20 text-purple-300',
+    dispatched:    'bg-orange-500/20 text-orange-300',
+    in_transit:    'bg-cyan-500/20 text-cyan-300',
+  }
+  return map[status] ?? 'bg-slate-500/20 text-slate-300'
+}
