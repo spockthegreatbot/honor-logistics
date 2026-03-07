@@ -72,6 +72,20 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
   try {
     const body = await request.json()
+
+    // Check if cycle is invoiced — block edits unless unlocking (setting status back)
+    const { data: current } = await supabase
+      .from('billing_cycles')
+      .select('status')
+      .eq('id', id)
+      .single()
+    if (current?.status === 'invoiced' && body.status !== 'review') {
+      return NextResponse.json(
+        { error: 'Billing cycle is invoiced — contact admin to unlock' },
+        { status: 423 }
+      )
+    }
+
     const update = Object.fromEntries(
       Object.entries(body).filter(([k]) => BILLING_PATCH_FIELDS.includes(k))
     )
@@ -102,15 +116,16 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     // Delete storage_weekly rows
     await supabase.from('storage_weekly').delete().eq('billing_cycle_id', id)
 
-    // Get all job IDs for this cycle, then delete their details
+    // Get all job IDs for this cycle, then bulk-delete their details (4 queries, not N*4)
     const { data: jobs } = await supabase.from('jobs').select('id').eq('billing_cycle_id', id)
     if (jobs && jobs.length > 0) {
       const ids = jobs.map(j => j.id)
-      for (const tbl of ['runup_details', 'install_details', 'delivery_details', 'toner_orders']) {
-        for (const jid of ids) {
-          await supabase.from(tbl).delete().eq('job_id', jid)
-        }
-      }
+      await Promise.all([
+        supabase.from('runup_details').delete().in('job_id', ids),
+        supabase.from('install_details').delete().in('job_id', ids),
+        supabase.from('delivery_details').delete().in('job_id', ids),
+        supabase.from('toner_orders').delete().in('job_id', ids),
+      ])
       await supabase.from('jobs').delete().eq('billing_cycle_id', id)
     }
 

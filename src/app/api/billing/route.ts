@@ -40,6 +40,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'client_id, period_start, period_end required' }, { status: 400 })
     }
 
+    // Check for duplicate billing cycle
+    const { data: existing } = await supabase
+      .from('billing_cycles')
+      .select('id, cycle_name')
+      .eq('client_id', client_id)
+      .eq('period_start', period_start)
+      .eq('period_end', period_end)
+      .maybeSingle()
+    if (existing) {
+      return NextResponse.json(
+        { error: `Billing cycle already exists: "${existing.cycle_name}" (${existing.id})` },
+        { status: 409 }
+      )
+    }
+
     const { data, error } = await supabase
       .from('billing_cycles')
       .insert({
