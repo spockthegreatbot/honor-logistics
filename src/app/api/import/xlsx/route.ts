@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   const efexClient = clients?.find(c => c.name.toLowerCase().includes('efex'))
   const clientId = cycle.client_id || efexClient?.id
 
-  const counts = { runup: 0, install: 0, delivery: 0, collection: 0, toner: 0, errors: 0 }
+  const counts: Record<string, number> = { runup: 0, install: 0, delivery: 0, collection: 0, toner: 0, storage: 0, storage_total: 0, errors: 0 }
 
   // Helper: get sheet rows as arrays
   function getRows(sheetName: string): unknown[][] {
@@ -177,6 +177,32 @@ export async function POST(request: NextRequest) {
       await supabase.from(tbl).insert(data.slice(i, i + 100))
     }
   }
+
+  // STORAGE — storage_weekly table
+  const storageRows = getRows('Storage')
+  const storageBulk: Record<string, unknown>[] = []
+  let storageTotal = 0
+  for (const row of storageRows.slice(5) as unknown[][]) {
+    if (!row[2] || !row[4]) continue
+    const qty = sf(row[5]); const cost = sf(row[6]); const total = sf(row[7])
+    if (total === 0) continue
+    storageBulk.push({
+      billing_cycle_id: cycleId,
+      week_label: ss(row[2]),
+      storage_type: ss(row[4]),
+      qty: Math.round(qty),
+      cost_ex: cost,
+      total_ex: total,
+      auto_populated: false,
+    })
+    storageTotal += total
+  }
+  if (storageBulk.length > 0) {
+    await supabase.from('storage_weekly').delete().eq('billing_cycle_id', cycleId)
+    await supabase.from('storage_weekly').insert(storageBulk)
+  }
+  counts.storage = storageBulk.length
+  counts.storage_total = storageTotal
 
   // Auto-trigger recalculate
   const recalcUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://honor-logistics.vercel.app'}/api/billing/${cycleId}/calculate`

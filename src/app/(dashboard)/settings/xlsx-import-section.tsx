@@ -27,6 +27,8 @@ interface ImportResult {
     delivery: number
     collection: number
     toner: number
+    storage: number
+    storage_total: number
     errors: number
   }
 }
@@ -151,8 +153,8 @@ export function XlsxImportSection({ billingCycles }: Props) {
         </div>
 
         {/* What gets imported */}
-        <div className="bg-[#1a1d27] rounded-lg p-4 grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
-          {[['⚙️', 'Run Ups'], ['🔧', 'Install'], ['🚛', 'Delivery'], ['📦', 'Collection'], ['🖨️', 'Toner']].map(([icon, label]) => (
+        <div className="bg-[#1a1d27] rounded-lg p-4 grid grid-cols-3 sm:grid-cols-6 gap-3 text-center">
+          {[['⚙️', 'Run Ups'], ['🔧', 'Install'], ['🚛', 'Delivery'], ['📦', 'Collection'], ['🖨️', 'Toner'], ['🏭', 'Storage']].map(([icon, label]) => (
             <div key={label} className="flex flex-col items-center gap-1">
               <span className="text-xl">{icon}</span>
               <span className="text-xs text-[#94a3b8]">{label}</span>
@@ -183,13 +185,14 @@ export function XlsxImportSection({ billingCycles }: Props) {
                 Import complete — {result.total_jobs} jobs added to {result.cycle_name}
               </span>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-center">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
               {[
                 ['⚙️', 'Run Ups', result.imported.runup],
                 ['🔧', 'Install', result.imported.install],
                 ['🚛', 'Delivery', result.imported.delivery],
                 ['📦', 'Collection', result.imported.collection],
                 ['🖨️', 'Toner', result.imported.toner],
+                ['🏭', 'Storage', result.imported.storage],
               ].map(([icon, label, count]) => (
                 <div key={String(label)} className="bg-[#1a1d27] rounded-lg py-2 px-3">
                   <div className="text-base">{icon}</div>
