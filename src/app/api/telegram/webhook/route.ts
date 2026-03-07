@@ -198,10 +198,13 @@ ${ctx.recentJobs?.length ? JSON.stringify(ctx.recentJobs, null, 1) : 'None'}
 }
 
 export async function POST(req: NextRequest) {
-  // C2: Verify Telegram webhook secret token
-  const secret = req.headers.get('x-telegram-bot-api-secret-token')
-  if (secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // C2: Verify Telegram webhook secret token (only enforce if env var is set)
+  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET
+  if (expectedSecret) {
+    const secret = req.headers.get('x-telegram-bot-api-secret-token')
+    if (secret !== expectedSecret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
   }
 
   try {
