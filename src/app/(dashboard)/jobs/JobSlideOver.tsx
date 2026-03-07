@@ -25,6 +25,9 @@ interface DeliveryDetails {
   from_address: string | null
   to_address: string | null
   delivery_notes: string | null
+  stair_walker: boolean | null
+  parking_available: boolean | null
+  parking_notes: string | null
 }
 
 interface InstallDetails {
@@ -33,6 +36,9 @@ interface InstallDetails {
   fma_required: boolean | null
   papercut_required: boolean | null
   fma_notes: string | null
+  stair_walker: boolean | null
+  parking_available: boolean | null
+  parking_notes: string | null
 }
 
 interface Job {
@@ -366,11 +372,11 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                 </div>
               )}
 
-              {/* Delivery / Relocation addresses */}
-              {job.delivery_details && job.delivery_details.length > 0 && (job.delivery_details[0].from_address || job.delivery_details[0].to_address) && (
+              {/* Delivery / Relocation addresses + site requirements */}
+              {job.delivery_details && job.delivery_details.length > 0 && (
                 <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">
-                    {job.delivery_details[0].subtype === 'relocation' ? 'Relocation Addresses' : 'Delivery Addresses'}
+                    {job.delivery_details[0].subtype === 'relocation' ? 'Relocation Details' : 'Delivery Details'}
                   </p>
                   {job.delivery_details[0].from_address && (
                     <div className="flex items-start gap-3">
@@ -384,12 +390,30 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                       <span className="text-sm text-[#f1f5f9]">{job.delivery_details[0].to_address}</span>
                     </div>
                   )}
+                  {/* Always show stair walker + parking */}
+                  <div className="flex gap-4 pt-1 border-t border-[#2a2d3e]">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${job.delivery_details[0].stair_walker ? 'bg-amber-400' : 'bg-[#2a2d3e]'}`} />
+                      <span className={`text-xs ${job.delivery_details[0].stair_walker ? 'text-amber-300 font-medium' : 'text-[#94a3b8]'}`}>
+                        Stair Walker: {job.delivery_details[0].stair_walker ? 'YES ⚠️' : 'No'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${job.delivery_details[0].parking_available ? 'bg-green-400' : 'bg-[#2a2d3e]'}`} />
+                      <span className={`text-xs ${job.delivery_details[0].parking_available ? 'text-green-300' : 'text-[#94a3b8]'}`}>
+                        Parking: {job.delivery_details[0].parking_available ? 'Yes' : 'No / Unknown'}
+                      </span>
+                    </div>
+                  </div>
+                  {job.delivery_details[0].parking_notes && (
+                    <p className="text-xs text-[#94a3b8] italic">{job.delivery_details[0].parking_notes}</p>
+                  )}
                 </div>
               )}
 
               {/* Install details */}
               {job.install_details && job.install_details.length > 0 && (
-                <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-2">
+                <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">Install Details</p>
                   <div className="flex flex-wrap gap-2">
                     {job.install_details[0].install_type && (
@@ -399,7 +423,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                     )}
                     {job.install_details[0].fma_required && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300 font-medium">
-                        ⚠️ FMA Required
+                        ⚠️ FMA — confirm fleet monitoring active after install
                       </span>
                     )}
                     {job.install_details[0].papercut_required && (
@@ -408,6 +432,24 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                       </span>
                     )}
                   </div>
+                  {/* Always show stair walker + parking */}
+                  <div className="flex gap-4 pt-1 border-t border-[#2a2d3e]">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${job.install_details[0].stair_walker ? 'bg-amber-400' : 'bg-[#2a2d3e]'}`} />
+                      <span className={`text-xs ${job.install_details[0].stair_walker ? 'text-amber-300 font-medium' : 'text-[#94a3b8]'}`}>
+                        Stair Walker: {job.install_details[0].stair_walker ? 'YES ⚠️' : 'No'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${job.install_details[0].parking_available ? 'bg-green-400' : 'bg-[#2a2d3e]'}`} />
+                      <span className={`text-xs ${job.install_details[0].parking_available ? 'text-green-300' : 'text-[#94a3b8]'}`}>
+                        Parking: {job.install_details[0].parking_available ? 'Yes' : 'No / Unknown'}
+                      </span>
+                    </div>
+                  </div>
+                  {job.install_details[0].parking_notes && (
+                    <p className="text-xs text-[#94a3b8] italic">{job.install_details[0].parking_notes}</p>
+                  )}
                   {job.install_details[0].fma_notes && (
                     <p className="text-xs text-[#94a3b8]">{job.install_details[0].fma_notes}</p>
                   )}
