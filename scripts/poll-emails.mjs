@@ -4,6 +4,7 @@ import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
+import mammoth from 'mammoth'
 
 // Load env from .env.local
 const envFile = new URL('../.env.local', import.meta.url).pathname
@@ -27,7 +28,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
 // Telegram alerts disabled — Honor bot handles orders directly in group
 function sendTelegram(_text) { return }
 
-const SKIP_REFS = new Set(['example', 'here', 'this', 'note', 'info', 'email', 'http', 'https'])
+const SKIP_REFS = new Set(['example', 'here', 'this', 'note', 'info', 'email', 'http', 'https', 'customer', 'order', 'booking', 'type', 'date', 'reference', 'contact', 'address', 'serial'])
 
 function extractEfexReference(text) {
   const patterns = [
@@ -79,6 +80,192 @@ function extractDate(text) {
   return null
 }
 
+// ── DOCX parsing ─────────────────────────────────────────────────────────────
+
+async function extractDocxData(buffer) {
+  try {
+    const [rawResult, htmlResult] = await Promise.all([
+      mammoth.extractRawText({ buffer }),
+      mammoth.convertToHtml({ buffer }),
+    ])
+    return { raw: rawResult.value ?? '', html: htmlResult.value ?? '' }
+  } catch (e) {
+    console.error('  docx parse error:', e.message)
+    return { raw: '', html: '' }
+  }
+}
+
+// Parse the EFEX "Pick-Up / Delivery Install Request" form using HTML table structure
+function parseEfexForm({ raw, html }, subject = '') {
+  // Extract all <td> cell contents as clean text
+  const cells = []
+  const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi
+  let m
+  while ((m = tdRe.exec(html)) !== null) {
+    const cellText = m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    cells.push(cellText)
+  }
+
+  // Build label→value map from adjacent cells
+  const lv = {}
+  for (let i = 0; i < cells.length - 1; i++) {
+    const k = cells[i].toUpperCase().replace(/[^A-Z0-9\s\/&]/g, '').trim()
+    const v = cells[i + 1].trim()
+    if (k.length >= 3 && k.length <= 60 && v) lv[k] = v
+  }
+
+  function get(...labels) {
+    for (const l of labels) {
+      for (const [k, v] of Object.entries(lv)) {
+        if (k.includes(l.toUpperCase()) && v && v.length > 1) return v
+      }
+    }
+    return null
+  }
+
+  // Customer — stop before ORDER TYPE
+  const customerRaw = get('CUSTOMER')
+  const customerName = customerRaw?.split(/ORDER TYPE|DELIVERY DATE|BEST CONTACT/i)[0].trim() || customerRaw
+
+  // Order types: look at ORDER TYPE row cells for ☑ or bold/checked markers
+  // EFEX docx uses Word checkbox controls — we look for cell patterns
+  const orderTypeIdx = cells.findIndex(c => /order\s*type/i.test(c))
+  const orderTypes = []
+  if (orderTypeIdx >= 0) {
+    // Next cells are the type options — checked ones may have ☑ or appear as separate short cells
+    const slice = cells.slice(orderTypeIdx + 1, orderTypeIdx + 8).join(' ')
+    // Word form checkboxes render as ☐ (unchecked U+2610) or ☑ (checked U+2611)
+    if (/☑[^☑☐]*DELIVERY|DELIVERY[^☑☐]*☑/i.test(slice)) orderTypes.push('delivery')
+    if (/☑[^☑☐]*INSTALL|INSTALL[^☑☐]*☑/i.test(slice)) orderTypes.push('installation')
+    if (/☑[^☑☐]*PICK|PICK[^☑☐]*☑/i.test(slice)) orderTypes.push('pickup')
+    if (/☑[^☑☐]*RELOC|RELOC[^☑☐]*☑/i.test(slice)) orderTypes.push('relocation')
+  }
+  // Fallback: derive from subject line (most reliable — EFEX includes type in subject)
+  if (orderTypes.length === 0) {
+    const s = subject.toUpperCase()
+    if (/COLLECTION/.test(s)) orderTypes.push('pickup')
+    if (/INSTALL/.test(s)) orderTypes.push('installation')
+    if (/RELOCATION/.test(s)) orderTypes.push('relocation')
+    if (/DELIVERY/.test(s) && !orderTypes.includes('delivery')) orderTypes.push('delivery')
+    // Install bookings from EFEX are always delivery + installation
+    if (orderTypes.includes('installation') && !orderTypes.includes('delivery')) orderTypes.unshift('delivery')
+  }
+
+  // Date
+  const dateRaw = get('DELIVERY DATE', 'INSTALL DATE', 'DATE')
+  const scheduledDate = (dateRaw ? extractDate(dateRaw) : null) ?? extractDate(subject)
+
+  // Contact — "Celia - 02 8890 7484"
+  const contactRaw = get('BEST CONTACT', 'CONTACT ON SITE', 'CONTACT NAME & NUMBER', 'CONTACT')
+  let contactName = null, contactPhone = null
+  if (contactRaw) {
+    const phoneM = contactRaw.match(/(\(?\d[\d\s\-\(\)]{7,})/)
+    if (phoneM) {
+      contactPhone = phoneM[1].trim()
+      contactName = contactRaw.slice(0, phoneM.index).replace(/[-,\s]+$/, '').trim() || null
+    } else {
+      contactName = contactRaw.slice(0, 80)
+    }
+  }
+
+  // Machine — MODEL/PART NUMBER cell, then same row SERIAL NUMBER cell
+  // Find the row: cells = [..., "MODEL /PART NUMBER", "ACCESSORIES / PART NUMBER", "SERIAL NUMBER", modelVal, accVal, serialVal, ...]
+  const modelLabelIdx = cells.findIndex(c => /model.*part/i.test(c))
+  let machineModel = null, machineSerial = null, machineAccessories = null
+  if (modelLabelIdx >= 0) {
+    // Data row starts after the 3 header cells
+    const dataStart = modelLabelIdx + 3
+    machineModel = cells[dataStart]?.trim() || null
+    machineAccessories = cells[dataStart + 1]?.trim() || null
+    machineSerial = cells[dataStart + 2]?.trim() || null
+    // Clean up — remove trailing label words
+    machineModel = machineModel?.replace(/ACCESSORIES|SERIAL|INSTALL|ADDRESS/gi, '').trim() || null
+    machineSerial = machineSerial?.replace(/INSTALL|ADDRESS|YES|NO/gi, '').trim() || null
+  }
+
+  // Install IDCA — look in cells for YES/NO after Install IDCA
+  let installIdca = null
+  const idcaIdx = cells.findIndex(c => /install\s*id?ca/i.test(c))
+  if (idcaIdx >= 0) {
+    const idcaSlice = cells.slice(idcaIdx + 1, idcaIdx + 4).join(' ')
+    if (/\bYES\b/i.test(idcaSlice) && !/☐.*YES|YES.*☐/i.test(idcaSlice)) {
+      // Heuristic: if YES appears before NO in the cell, and no unchecked marker
+      const yIdx = idcaSlice.search(/\bYES\b/i)
+      const nIdx = idcaSlice.search(/\bNO\b/i)
+      // With Word checkboxes we can't tell easily — use the raw html bold/color check
+      // For now default to as-found (will be null = unset)
+    }
+  }
+  // Fallback: look in raw text for "Install IDCA YES NO" context
+  const idcaRaw = raw.match(/Install\s*I[DC]CA\s*(YES|NO)/i)
+  if (idcaRaw) installIdca = idcaRaw[1].toLowerCase() === 'yes'
+
+  // Address
+  const addressRaw = get('ADDRESS')
+  const address = addressRaw?.slice(0, 200).trim() || null
+
+  // Stair walker / parking
+  const stairRaw = get('STAIR WALKER', 'STAIRWALKER')
+  const parkRaw = get('PARKING')
+  let stairWalker = null, parkingYn = null
+  if (stairRaw) {
+    if (/\bYES\b/i.test(stairRaw) && !/\bNO\b/i.test(stairRaw)) stairWalker = true
+    else if (/\bNO\b/i.test(stairRaw)) stairWalker = false
+  }
+  if (parkRaw) {
+    if (/\bYES\b/i.test(parkRaw) && !/\bNO\b/i.test(parkRaw)) parkingYn = true
+    else if (/\bNO\b/i.test(parkRaw)) parkingYn = false
+  }
+  const stairComment = stairRaw?.replace(/YES|NO|COMMENT[:;]?\s*/gi, '').trim() || null
+  const parkComment = parkRaw?.replace(/YES|NO|COMMENT[:;]?\s*/gi, '').trim() || null
+
+  // Pick-up section
+  const pickupLabelIdx = cells.findIndex(c => /pick.?up\s*model/i.test(c))
+  let pickupModel = null, pickupAccessories = null, pickupSerial = null, pickupDisposition = null
+  if (pickupLabelIdx >= 0) {
+    const dataStart = pickupLabelIdx + 4 // after 4 header cells
+    pickupModel = cells[dataStart]?.trim() || null
+    pickupAccessories = cells[dataStart + 1]?.trim() || null
+    pickupSerial = cells[dataStart + 2]?.trim() || null
+    pickupDisposition = cells[dataStart + 3]?.trim() || null
+  }
+
+  // Special instructions
+  const siRaw = raw.match(/SPECIAL\s*INSTRUCTIONS[:\s]*([^\n]{5,}(?:\n(?!^[A-Z\s]+:)[^\n]*)*)/im)
+  const specialInstructions = siRaw?.[1]?.trim().slice(0, 400) ?? get('SPECIAL INSTRUCTIONS')
+
+  // EFEX reference — only accept numeric refs
+  const efexRef = (() => {
+    const m = raw.match(/EFEX\s*REFERENCE[#:\s]*(\d{4,})/i) ??
+              raw.match(/#\s*(\d{5,})/) ??
+              raw.match(/REF(?:ERENCE)?[#:\s]+(\d{4,})/i)
+    return m?.[1] ?? null
+  })()
+
+  return {
+    customerName: customerName?.slice(0, 120) ?? null,
+    orderTypes,
+    scheduledDate,
+    contactName: contactName?.slice(0, 80) ?? null,
+    contactPhone: contactPhone?.replace(/\s+/g, ' ').slice(0, 20) ?? null,
+    machineModel: machineModel?.slice(0, 100) ?? null,
+    machineSerial: machineSerial?.slice(0, 50) ?? null,
+    machineAccessories: machineAccessories?.slice(0, 100) || null,
+    installIdca,
+    address: address?.slice(0, 200) ?? null,
+    stairWalker,
+    stairWalkerComment: stairComment?.slice(0, 100) ?? null,
+    parking: parkingYn,
+    parkingComment: parkComment?.slice(0, 100) ?? null,
+    pickupModel: pickupModel?.slice(0, 100) ?? null,
+    pickupSerial: pickupSerial?.slice(0, 50) ?? null,
+    pickupAccessories: pickupAccessories?.slice(0, 100) ?? null,
+    pickupDisposition: pickupDisposition?.slice(0, 50) ?? null,
+    specialInstructions: specialInstructions?.slice(0, 400) ?? null,
+    efexRef,
+  }
+}
+
 // Map EFEX order type labels to valid job_type constraint values
 const ORDER_TYPE_MAP = {
   delivery: 'delivery',
@@ -106,32 +293,37 @@ function isEfexJobRequest(subject, body, fromEmail) {
   ) && !combined.includes('acknowledgment') && !combined.includes('invoice')
 }
 
-async function createJobFromEmail(body, subject) {
+async function createJobFromEmail(body, subject, docx = null) {
   try {
     const { data: efexClient } = await supabase.from('clients').select('id').ilike('name', '%efex%').limit(1).single()
     const clientId = efexClient?.id ?? null
 
     const combined = subject + '\n' + body
-    const orderTypes = detectOrderTypes(combined)
-    const jobType = ORDER_TYPE_MAP[orderTypes[0]] ?? 'delivery'
-    const ref = extractEfexReference(combined)
 
-    const contactName = extractField(combined, 'contact', 'best contact', 'contact person', 'attn', 'site contact')
-    const contactPhone = extractField(combined, 'phone', 'mobile', 'tel', 'contact number', 'ph')
-    const scheduledDateRaw = extractField(combined, 'delivery date', 'install date', 'booking date')
-    // Priority: date from subject line (most reliable), then field, then full body
-    const scheduledDate = extractDate(subject) ?? (scheduledDateRaw ? extractDate(scheduledDateRaw) : null) ?? extractDate(combined)
+    // Prefer docx fields over email body parsing
+    const d = docx ?? {}
+    const orderTypes = (d.orderTypes?.length > 0) ? d.orderTypes : detectOrderTypes(combined)
+    const jobType = ORDER_TYPE_MAP[orderTypes[0]] ?? 'delivery'
+    const ref = d.efexRef ?? extractEfexReference(combined)
+    const contactName = d.contactName ?? extractField(combined, 'contact', 'best contact', 'contact person', 'attn')
+    const contactPhone = d.contactPhone ?? extractField(combined, 'phone', 'mobile', 'tel', 'contact number')
+    const scheduledDate = d.scheduledDate ?? extractDate(subject) ?? extractDate(combined)
     const scheduledTime = extractField(combined, 'time', 'delivery time', 'arrival time')
-    const machineModel = extractField(combined, 'model', 'machine', 'unit', 'part', 'product')  // goes into notes
-    const machineSerial = extractField(combined, 'serial', 's/n', 'serial no', 'serial number')
-    const machineAccessories = extractField(combined, 'accessories', 'accessory', 'add-on')
-    const addressTo = extractField(combined, 'delivery address', 'install address', 'site address', 'address', 'deliver to', 'location')
-    const addressFrom = orderTypes.includes('relocation') ? extractField(combined, 'collect from', 'pickup from', 'from address') : null
-    const specialInstructions = extractField(combined, 'special instructions', 'notes', 'comments', 'instructions')
-    const stairMatch = combined.match(/stair\s*walker[:\s]*(yes|no)/i)
-    const parkingMatch = combined.match(/parking[:\s]*(yes|no)/i)
-    const stairWalker = stairMatch ? stairMatch[1].toLowerCase() === 'yes' : null
-    const parking = parkingMatch ? parkingMatch[1].toLowerCase() === 'yes' : null
+    const machineSerial = d.machineSerial ?? extractField(combined, 'serial', 's/n', 'serial number')
+    const machineAccessories = d.machineAccessories ?? null
+    const addressTo = d.address ?? extractField(combined, 'delivery address', 'address', 'site address')
+    const addressFrom = (orderTypes.includes('relocation') ? d.addressFrom ?? extractField(combined, 'collect from', 'pickup from') : null)
+    const specialInstructions = d.specialInstructions ?? extractField(combined, 'special instructions', 'comments')
+    const stairWalker = d.stairWalker ?? null
+    const stairWalkerComment = d.stairWalkerComment ?? null
+    const parking = d.parking ?? null
+    const parkingComment = d.parkingComment ?? null
+    const installIdca = d.installIdca ?? null
+    const pickupModel = d.pickupModel ?? null
+    const pickupSerial = d.pickupSerial ?? null
+    const pickupAccessories = d.pickupAccessories ?? null
+    const pickupDisposition = d.pickupDisposition ?? null
+    const machineModelNote = d.machineModel ?? extractField(combined, 'model', 'machine', 'part')
 
     // Check for duplicate — by ref if reliable, else by subject
     if (ref && ref.length >= 5 && !SKIP_REFS.has(ref.toLowerCase())) {
@@ -159,12 +351,22 @@ async function createJobFromEmail(body, subject) {
     const lastSeq = lastJob?.job_number ? parseInt(lastJob.job_number.split('-')[2] ?? '0') : 0
     const jobNumber = `HRL-${year}-${String(lastSeq + 1).padStart(4, '0')}`
 
+    // Look up or create end_customer from docx customer name
+    let endCustomerId = null
+    const endCustomerName = d.customerName ?? null
+    if (endCustomerName && clientId) {
+      const { data: ec } = await supabase.from('end_customers').select('id')
+        .ilike('name', `%${endCustomerName.split(' ')[0]}%`).eq('client_id', clientId).limit(1).single()
+      endCustomerId = ec?.id ?? null
+    }
+
     const { data: newJob, error } = await supabase.from('jobs').insert({
       job_number: jobNumber,
       job_type: jobType,
       order_types: orderTypes,
       status: 'new',
       client_id: clientId,
+      end_customer_id: endCustomerId,
       client_reference: ref,
       contact_name: contactName,
       contact_phone: contactPhone,
@@ -175,10 +377,17 @@ async function createJobFromEmail(body, subject) {
       address_to: addressTo,
       address_from: addressFrom,
       stair_walker: stairWalker,
+      stair_walker_comment: stairWalkerComment,
       parking: parking,
+      parking_comment: parkingComment,
+      install_idca: installIdca,
+      pickup_model: pickupModel,
+      pickup_serial: pickupSerial,
+      pickup_accessories: pickupAccessories,
+      pickup_disposition: pickupDisposition,
       special_instructions: specialInstructions,
       has_aod: false,
-      notes: `Auto-created from email — review and update fields as needed.\nSubject: ${subject}${machineModel ? '\nMachine: ' + machineModel : ''}`,
+      notes: `Auto-created from email — review and update fields as needed.\nSubject: ${subject}${machineModelNote ? '\nMachine: ' + machineModelNote : ''}${endCustomerName ? '\nCustomer: ' + endCustomerName : ''}`,
     }).select('id, job_number').single()
 
     if (error) throw error
@@ -234,7 +443,7 @@ async function run() {
         fromName = parsed.from?.value?.[0]?.name ?? fromName
         attachments = (parsed.attachments ?? []).map(a => ({
           filename: a.filename ?? 'attachment',
-          contentType: a.contentType,
+          contentType: a.contentType ?? '',
           content: a.content,
         }))
       }
@@ -245,6 +454,22 @@ async function run() {
     console.log(`\n📧 From: ${fromName} <${from}>`)
     console.log(`   Subject: ${subject}`)
 
+    // Detect EFEX docx job request form
+    const docxAttach = attachments.find(a =>
+      a.filename.toLowerCase().endsWith('.docx') ||
+      a.contentType.includes('wordprocessingml') ||
+      a.contentType.includes('msword')
+    )
+    let docxFields = null
+    if (docxAttach) {
+      console.log(`  📄 DOCX found: ${docxAttach.filename} — parsing...`)
+      const docxData = await extractDocxData(docxAttach.content)
+      if (docxData.raw) {
+        docxFields = parseEfexForm(docxData, subject)
+        console.log(`  📄 Parsed: types=${JSON.stringify(docxFields.orderTypes)} customer="${docxFields.customerName}" model="${docxFields.machineModel}" serial="${docxFields.machineSerial}" addr="${docxFields.address?.slice(0,40)}")`)
+      }
+    }
+
     // Detect AOD PDF
     const aodAttach = attachments.find(a =>
       a.contentType === 'application/pdf' &&
@@ -253,16 +478,15 @@ async function run() {
 
     if (aodAttach) {
       console.log(`  📎 AOD PDF: ${aodAttach.filename}`)
-      // Also create a job if the email body is a job request (e.g. install booking + AOD together)
-      if (isEfexJobRequest(subject, body, from)) {
+      if (isEfexJobRequest(subject, body, from) || docxFields) {
         console.log(`  🆕 Also a job request — creating job`)
-        await createJobFromEmail(body, subject)
+        await createJobFromEmail(body, subject, docxFields)
       }
     }
 
-    if (!aodAttach && isEfexJobRequest(subject, body, from)) {
+    if (!aodAttach && (isEfexJobRequest(subject, body, from) || docxFields)) {
       console.log(`  🆕 EFEX job request detected`)
-      const result = await createJobFromEmail(body, subject)
+      const result = await createJobFromEmail(body, subject, docxFields)
 
       if (result && !result.duplicate) {
         console.log(`  ✅ Created: ${result.job_number}`)
