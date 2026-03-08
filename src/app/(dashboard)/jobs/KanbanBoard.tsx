@@ -20,6 +20,7 @@ interface Job {
   client_id?: string | null
   clients?: { name: string; color_code?: string | null } | null
   end_customers?: { name: string } | null
+  machine_model?: string | null
   staff?: { name: string } | null
   runup_details?: { check_signed_off: boolean | null } | null
 }

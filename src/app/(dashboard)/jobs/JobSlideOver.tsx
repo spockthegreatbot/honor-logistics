@@ -79,6 +79,7 @@ interface Job {
   pickup_disposition?: string | null
   special_instructions?: string | null
   has_aod?: boolean | null
+  machine_model?: string | null
   clients?: { name: string } | null
   end_customers?: { name: string; address?: string | null; contact_name?: string | null; contact_phone?: string | null } | null
   staff?: { name: string } | null
@@ -149,6 +150,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
   const [pickupDisposition, setPickupDisposition] = useState('')
   const [specialInstructions, setSpecialInstructions] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
+  const [machineModel, setMachineModel] = useState('')
   const [hasAod, setHasAod] = useState(false)
 
   const fetchJob = useCallback(async () => {
@@ -188,6 +190,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         setPickupDisposition(j.pickup_disposition ?? '')
         setSpecialInstructions(j.special_instructions ?? '')
         setSerialNumber(j.serial_number ?? '')
+        setMachineModel(j.machine_model ?? '')
         setHasAod(j.has_aod ?? false)
       }
     } catch (e) {
@@ -235,6 +238,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
           contact_name: contactName || null,
           contact_phone: contactPhone || null,
           scheduled_time: scheduledTime || null,
+          machine_model: machineModel || null,
           machine_accessories: machineAccessories || null,
           install_idca: installIdca,
           address_to: addressTo || null,
@@ -714,7 +718,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                       <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Machine Details</p>
                       <div>
                         <label className={labelCls}>Model / Part #</label>
-                        <p className="text-sm text-[#f1f5f9] py-1">{job.notes?.match(/Machine: ([^\n]+)/)?.[1]?.trim() ?? job.machines?.model ?? '—'}</p>
+                        <input value={machineModel} onChange={e => setMachineModel(e.target.value)} placeholder="—" className={inputCls} />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div><label className={labelCls}>Accessories / Part #</label>

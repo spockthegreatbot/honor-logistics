@@ -27,6 +27,7 @@ interface Job {
   notes: string | null
   client_reference: string | null
   parent_job_id: string | null
+  machine_model?: string | null
   created_at: string | null
   clients?: { name: string; color_code?: string | null } | null
   end_customers?: { name: string } | null

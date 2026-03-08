@@ -364,7 +364,7 @@ async function createJobFromEmail(body, subject, docx = null) {
     const pickupSerial = d.pickupSerial ?? null
     const pickupAccessories = d.pickupAccessories ?? null
     const pickupDisposition = d.pickupDisposition ?? null
-    const machineModelNote = cleanVal(d.machineModel ?? extractField(combined, 'model', 'machine', 'part'))
+    const machineModel = cleanVal(d.machineModel ?? extractField(combined, 'model', 'machine', 'part'))
 
     // Check for duplicate — by ref if reliable, else by subject
     if (ref && ref.length >= 5 && !SKIP_REFS.has(ref.toLowerCase())) {
@@ -427,8 +427,9 @@ async function createJobFromEmail(body, subject, docx = null) {
       pickup_accessories: pickupAccessories,
       pickup_disposition: pickupDisposition,
       special_instructions: specialInstructions,
+      machine_model: machineModel,
       has_aod: false,
-      notes: `Auto-created from email — review and update fields as needed.\nSubject: ${subject}${machineModelNote ? '\nMachine: ' + machineModelNote : ''}${endCustomerName ? '\nCustomer: ' + endCustomerName : ''}`,
+      notes: `Auto-created from email — review and update fields as needed.\nSubject: ${subject}${endCustomerName ? '\nCustomer: ' + endCustomerName : ''}`,
     }).select('id, job_number').single()
 
     if (error) throw error

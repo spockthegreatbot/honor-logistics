@@ -17,7 +17,7 @@ const JOB_PATCH_FIELDS = [
   'install_idca', 'address_to', 'address_from', 'stair_walker', 'stair_walker_comment',
   'parking', 'parking_comment', 'pickup_model', 'pickup_accessories', 'pickup_serial',
   'pickup_disposition', 'special_instructions', 'has_aod', 'aod_pdf_url', 'aod_signed_at',
-  'serial_number', 'job_type',
+  'serial_number', 'job_type', 'machine_model',
 ]
 
 export async function PATCH(
