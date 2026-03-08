@@ -118,8 +118,9 @@ async function createJobFromEmail(body, subject) {
 
     const contactName = extractField(combined, 'contact', 'best contact', 'contact person', 'attn', 'site contact')
     const contactPhone = extractField(combined, 'phone', 'mobile', 'tel', 'contact number', 'ph')
-    const scheduledDateRaw = extractField(combined, 'delivery date', 'install date', 'date', 'scheduled', 'booking date')
-    const scheduledDate = scheduledDateRaw ? extractDate(scheduledDateRaw) : extractDate(combined)
+    const scheduledDateRaw = extractField(combined, 'delivery date', 'install date', 'booking date')
+    // Priority: date from subject line (most reliable), then field, then full body
+    const scheduledDate = extractDate(subject) ?? (scheduledDateRaw ? extractDate(scheduledDateRaw) : null) ?? extractDate(combined)
     const scheduledTime = extractField(combined, 'time', 'delivery time', 'arrival time')
     const machineModel = extractField(combined, 'model', 'machine', 'unit', 'part', 'product')  // goes into notes
     const machineSerial = extractField(combined, 'serial', 's/n', 'serial no', 'serial number')

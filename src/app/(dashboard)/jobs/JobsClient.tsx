@@ -19,6 +19,7 @@ interface Job {
   id: string
   job_number: string | null
   job_type: string
+  order_types?: string[] | null
   status: string | null
   serial_number: string | null
   scheduled_date: string | null
@@ -27,10 +28,25 @@ interface Job {
   client_reference: string | null
   parent_job_id: string | null
   created_at: string | null
-  clients?: { name: string } | null
+  clients?: { name: string; color_code?: string | null } | null
   end_customers?: { name: string } | null
   staff?: { name: string } | null
   runup_details?: { check_signed_off: boolean | null } | null
+}
+
+const EFEX_TYPE_LABELS: Record<string, string> = {
+  delivery: 'Delivery',
+  installation: 'Installation',
+  pickup: 'Pick-Up',
+  relocation: 'Relocation',
+}
+
+function orderTypeLabel(job: Job): string {
+  const types = job.order_types
+  if (types && types.length > 0) {
+    return types.map(t => EFEX_TYPE_LABELS[t] ?? jobTypeLabel(t)).join(' + ')
+  }
+  return jobTypeLabel(job.job_type)
 }
 
 interface Props {
@@ -227,9 +243,15 @@ export function JobsClient({ initialJobs, count }: Props) {
                         #{String(job.job_number ?? job.id).slice(-6).toUpperCase()}
                       </span>
                     </TableCell>
-                    <TableCell className="text-[#94a3b8]">{jobTypeLabel(job.job_type)}</TableCell>
+                    <TableCell>
+                      <span className="text-xs font-semibold text-orange-300 bg-orange-500/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                        {orderTypeLabel(job)}
+                      </span>
+                    </TableCell>
                     <TableCell className="font-medium text-[#f1f5f9]">
-                      {job.clients?.name ?? '—'}
+                      {job.clients?.name
+                        ? <span style={{ color: job.clients.color_code ?? undefined }} className="font-semibold">{job.clients.name}</span>
+                        : '—'}
                     </TableCell>
                     <TableCell className="text-[#94a3b8]">
                       {job.end_customers?.name ?? '—'}

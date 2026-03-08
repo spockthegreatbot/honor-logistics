@@ -13,6 +13,7 @@ interface Job {
   id: string
   job_number: string | null
   job_type: string
+  order_types?: string[] | null
   status: string | null
   serial_number: string | null
   scheduled_date: string | null
@@ -106,8 +107,10 @@ function JobCard({
               <span className="font-mono text-xs font-bold text-orange-400">
                 #{String(job.job_number ?? job.id).slice(-6).toUpperCase()}
               </span>
-              <span className={`text-xs px-1.5 py-0.5 rounded-md border font-medium ${typeColor}`}>
-                {jobTypeLabel(job.job_type)}
+              <span className={`text-xs px-1.5 py-0.5 rounded-md border font-medium ${typeColor} whitespace-nowrap`}>
+                {job.order_types && job.order_types.length > 0
+                  ? job.order_types.map(t => ({ delivery:'Delivery', installation:'Install', pickup:'Pick-Up', relocation:'Reloc' })[t] ?? t).join('+')
+                  : jobTypeLabel(job.job_type)}
               </span>
             </div>
 
