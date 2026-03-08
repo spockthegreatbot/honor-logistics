@@ -1,4 +1,11 @@
 import { ImapFlow } from 'imapflow'
+import { simpleParser } from 'mailparser'
+
+export interface EmailAttachment {
+  filename: string
+  contentType: string
+  content: Buffer
+}
 
 export interface ParsedEmail {
   uid: number
@@ -9,6 +16,7 @@ export interface ParsedEmail {
   body: string
   receivedAt: Date
   raw: string
+  attachments: EmailAttachment[]
 }
 
 export async function fetchUnreadEmails(): Promise<ParsedEmail[]> {
@@ -30,11 +38,9 @@ export async function fetchUnreadEmails(): Promise<ParsedEmail[]> {
   try {
     const lock = await client.getMailboxLock('INBOX')
     try {
-      // Fetch unseen messages
       for await (const msg of client.fetch({ seen: false }, {
         uid: true,
         envelope: true,
-        bodyStructure: true,
         source: true,
       })) {
         const envelope = msg.envelope
@@ -43,18 +49,36 @@ export async function fetchUnreadEmails(): Promise<ParsedEmail[]> {
         const fromName = from?.name ?? fromAddress
 
         const raw = msg.source?.toString() ?? ''
-        // Extract plain text body (simple approach — strips HTML tags)
-        const body = extractPlainText(raw)
+
+        // Parse with mailparser to get body + attachments
+        let body = ''
+        const attachments: EmailAttachment[] = []
+        try {
+          const parsed = await simpleParser(raw)
+          body = parsed.text ?? (typeof parsed.html === 'string' ? parsed.html.replace(/<[^>]+>/g, ' ') : '') ?? ''
+          for (const att of parsed.attachments ?? []) {
+            if (att.content && att.filename) {
+              attachments.push({
+                filename: att.filename,
+                contentType: att.contentType ?? 'application/octet-stream',
+                content: att.content,
+              })
+            }
+          }
+        } catch {
+          body = extractPlainText(raw)
+        }
 
         emails.push({
           uid: msg.uid,
-          messageId: envelope?.messageId ?? String(msg.uid),
+          messageId: envelope?.messageId ?? `uid-${msg.uid}`,
           from: fromAddress,
           fromName,
           subject: envelope?.subject ?? '(no subject)',
           body,
           receivedAt: envelope?.date ?? new Date(),
           raw,
+          attachments,
         })
       }
     } finally {
@@ -85,7 +109,7 @@ export async function markAsRead(uids: number[]): Promise<void> {
   try {
     const lock = await client.getMailboxLock('INBOX')
     try {
-      await client.messageFlagsAdd({ uid: uids as unknown as string }, ['\\Seen'])
+      await client.messageFlagsAdd(uids.join(','), ['\\Seen'])
     } finally {
       lock.release()
     }
@@ -95,18 +119,16 @@ export async function markAsRead(uids: number[]): Promise<void> {
 }
 
 function extractPlainText(raw: string): string {
-  // Find Content-Type: text/plain section
-  const plainMatch = raw.match(/Content-Type: text\/plain[^\n]*\n(?:[^\n]+\n)*\n([\s\S]*?)(?=--|\n\n--|\z)/i)
-  if (plainMatch) return plainMatch[1].trim()
-
-  // Fallback: strip HTML tags
-  return raw
-    .replace(/<[^>]+>/g, ' ')
+  const lines = raw.split('\n')
+  const bodyStart = lines.findIndex((l) => l.trim() === '')
+  if (bodyStart === -1) return raw.slice(0, 500)
+  return lines
+    .slice(bodyStart + 1)
+    .join('\n')
+    .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
     .slice(0, 2000)
 }

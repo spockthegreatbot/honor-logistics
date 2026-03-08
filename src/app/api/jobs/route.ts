@@ -59,22 +59,47 @@ export async function POST(request: Request) {
       po_number,
       notes,
       client_reference,
+      // EFEX fields
+      order_types,
+      contact_name,
+      contact_phone,
+      scheduled_time,
+      machine_accessories,
+      install_idca,
+      address_to,
+      address_from,
+      stair_walker,
+      stair_walker_comment,
+      parking,
+      parking_comment,
+      pickup_model,
+      pickup_accessories,
+      pickup_serial,
+      pickup_disposition,
+      special_instructions,
+      has_aod,
     } = body
 
-    if (!job_type || !client_id) {
-      return NextResponse.json({ error: 'job_type and client_id are required' }, { status: 400 })
+    if (!client_id) {
+      return NextResponse.json({ error: 'client_id is required' }, { status: 400 })
     }
 
-    // Generate job number
-    const jobNumber = `HL-${Date.now().toString(36).toUpperCase()}`
+    // Derive job_type from order_types if it's an EFEX job
+    const effectiveJobType = job_type || (order_types?.length > 0 ? order_types[0] : 'delivery')
 
-    const initialStatus = job_type === 'runup' ? 'runup_pending' : 'new'
+    // Generate job number: HRL-YYYY-XXXX
+    const now = new Date()
+    const { count: jobCount } = await supabase.from('jobs').select('*', { count: 'exact', head: true })
+    const seq = String((jobCount ?? 0) + 1).padStart(4, '0')
+    const jobNumber = `HRL-${now.getFullYear()}-${seq}`
+
+    const initialStatus = effectiveJobType === 'runup' ? 'runup_pending' : 'new'
 
     const { data: job, error: jobError } = await supabase
       .from('jobs')
       .insert({
         job_number: jobNumber,
-        job_type,
+        job_type: effectiveJobType,
         status: initialStatus,
         client_id: client_id || null,
         end_customer_id: end_customer_id || null,
@@ -84,6 +109,25 @@ export async function POST(request: Request) {
         po_number: po_number || null,
         notes: notes || null,
         client_reference: client_reference || null,
+        // EFEX fields
+        order_types: order_types ?? [],
+        contact_name: contact_name || null,
+        contact_phone: contact_phone || null,
+        scheduled_time: scheduled_time || null,
+        machine_accessories: machine_accessories || null,
+        install_idca: install_idca ?? null,
+        address_to: address_to || null,
+        address_from: address_from || null,
+        stair_walker: stair_walker ?? null,
+        stair_walker_comment: stair_walker_comment || null,
+        parking: parking ?? null,
+        parking_comment: parking_comment || null,
+        pickup_model: pickup_model || null,
+        pickup_accessories: pickup_accessories || null,
+        pickup_serial: pickup_serial || null,
+        pickup_disposition: pickup_disposition || null,
+        special_instructions: special_instructions || null,
+        has_aod: has_aod ?? false,
       })
       .select()
       .single()
@@ -94,7 +138,7 @@ export async function POST(request: Request) {
     }
 
     // If runup job, create runup_details row
-    if (job_type === 'runup' && job) {
+    if (effectiveJobType === 'runup' && job) {
       const { error: runupError } = await supabase
         .from('runup_details')
         .insert({
@@ -123,8 +167,9 @@ export async function POST(request: Request) {
       const d = details as unknown as { end_customers?: { name: string } | null; staff?: { name: string } | null } | null
       const custName = d?.end_customers?.name ?? 'N/A'
       const staffName = d?.staff?.name ?? 'Unassigned'
+      const orderLabel = order_types?.length ? order_types.join(' + ') : effectiveJobType
       sendTelegramAlert(
-        `🆕 *New Job: ${jobNumber}*\nType: ${job_type}\nCustomer: ${custName}\nScheduled: ${scheduled_date || 'TBD'}\nAssigned: ${staffName}`
+        `🆕 *New Job: ${jobNumber}*\nType: ${orderLabel}\nCustomer: ${custName}\nScheduled: ${scheduled_date || 'TBD'}\nAssigned: ${staffName}`
       )
     }
 

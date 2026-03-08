@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, CheckCircle2, AlertCircle, Loader2, PenLine, Download, Send } from 'lucide-react'
+import { X, CheckCircle2, AlertCircle, Loader2, PenLine, Download, Send, Printer, FileText } from 'lucide-react'
 import { SignaturePad } from '@/components/aod/SignaturePad'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -60,6 +60,25 @@ interface Job {
   updated_at: string | null
   aod_pdf_url?: string | null
   aod_signed_at?: string | null
+  // EFEX order fields
+  order_types?: string[] | null
+  contact_name?: string | null
+  contact_phone?: string | null
+  scheduled_time?: string | null
+  machine_accessories?: string | null
+  install_idca?: boolean | null
+  address_to?: string | null
+  address_from?: string | null
+  stair_walker?: boolean | null
+  stair_walker_comment?: string | null
+  parking?: boolean | null
+  parking_comment?: string | null
+  pickup_model?: string | null
+  pickup_accessories?: string | null
+  pickup_serial?: string | null
+  pickup_disposition?: string | null
+  special_instructions?: string | null
+  has_aod?: boolean | null
   clients?: { name: string } | null
   end_customers?: { name: string; address?: string | null; contact_name?: string | null; contact_phone?: string | null } | null
   staff?: { name: string } | null
@@ -111,6 +130,25 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
   const [aodGenerating, setAodGenerating] = useState(false)
   const [aodSending, setAodSending] = useState(false)
   const [aodMessage, setAodMessage] = useState<string | null>(null)
+  // EFEX fields
+  const [orderTypes, setOrderTypes] = useState<string[]>([])
+  const [contactName, setContactName] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [scheduledTime, setScheduledTime] = useState('')
+  const [machineAccessories, setMachineAccessories] = useState('')
+  const [installIdca, setInstallIdca] = useState<boolean | null>(null)
+  const [addressTo, setAddressTo] = useState('')
+  const [addressFrom, setAddressFrom] = useState('')
+  const [stairWalker, setStairWalker] = useState<boolean | null>(null)
+  const [stairWalkerComment, setStairWalkerComment] = useState('')
+  const [parkingYn, setParkingYn] = useState<boolean | null>(null)
+  const [parkingComment, setParkingComment] = useState('')
+  const [pickupModel, setPickupModel] = useState('')
+  const [pickupAccessories, setPickupAccessories] = useState('')
+  const [pickupSerial, setPickupSerial] = useState('')
+  const [pickupDisposition, setPickupDisposition] = useState('')
+  const [specialInstructions, setSpecialInstructions] = useState('')
+  const [hasAod, setHasAod] = useState(false)
 
   const fetchJob = useCallback(async () => {
     try {
@@ -126,6 +164,25 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         setClientId(j.client_id ?? '')
         setEndCustomerId(j.end_customer_id ?? '')
         setAssignedTo(j.assigned_to ?? '')
+        // EFEX fields
+        setOrderTypes(j.order_types ?? [])
+        setContactName(j.contact_name ?? '')
+        setContactPhone(j.contact_phone ?? '')
+        setScheduledTime(j.scheduled_time ?? '')
+        setMachineAccessories(j.machine_accessories ?? '')
+        setInstallIdca(j.install_idca ?? null)
+        setAddressTo(j.address_to ?? '')
+        setAddressFrom(j.address_from ?? '')
+        setStairWalker(j.stair_walker ?? null)
+        setStairWalkerComment(j.stair_walker_comment ?? '')
+        setParkingYn(j.parking ?? null)
+        setParkingComment(j.parking_comment ?? '')
+        setPickupModel(j.pickup_model ?? '')
+        setPickupAccessories(j.pickup_accessories ?? '')
+        setPickupSerial(j.pickup_serial ?? '')
+        setPickupDisposition(j.pickup_disposition ?? '')
+        setSpecialInstructions(j.special_instructions ?? '')
+        setHasAod(j.has_aod ?? false)
       }
     } catch (e) {
       console.error(e)
@@ -166,6 +223,25 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
           client_id: clientId || null,
           end_customer_id: endCustomerId || null,
           assigned_to: assignedTo || null,
+          // EFEX fields
+          order_types: orderTypes,
+          contact_name: contactName || null,
+          contact_phone: contactPhone || null,
+          scheduled_time: scheduledTime || null,
+          machine_accessories: machineAccessories || null,
+          install_idca: installIdca,
+          address_to: addressTo || null,
+          address_from: addressFrom || null,
+          stair_walker: stairWalker,
+          stair_walker_comment: stairWalkerComment || null,
+          parking: parkingYn,
+          parking_comment: parkingComment || null,
+          pickup_model: pickupModel || null,
+          pickup_accessories: pickupAccessories || null,
+          pickup_serial: pickupSerial || null,
+          pickup_disposition: pickupDisposition || null,
+          special_instructions: specialInstructions || null,
+          has_aod: hasAod,
         }),
       })
       if (res.ok) {
@@ -576,95 +652,177 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                 </div>
               )}
 
+              {/* ── EFEX Order Sections ─────────────────────────────── */}
+              {orderTypes.length > 0 && (() => {
+                const hasDel = orderTypes.includes('delivery') || orderTypes.includes('installation')
+                const hasRel = orderTypes.includes('relocation')
+                const hasPick = orderTypes.includes('pickup')
+                const needsAddr = hasDel || hasRel
+
+                const inputCls = 'w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500'
+                const labelCls = 'text-xs uppercase tracking-wider text-[#94a3b8] mb-1 block'
+
+                const YNBtn = ({ val, cur, onSet, color }: { val: boolean; cur: boolean | null; onSet: (v: boolean | null) => void; color: 'green' | 'red' }) => (
+                  <button type="button" onClick={() => onSet(cur === val ? null : val)}
+                    className={`px-3 py-1 rounded-lg border text-xs font-bold transition ${cur === val
+                      ? color === 'green' ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-red-500/20 border-red-500/40 text-red-400'
+                      : 'border-[#2a2d3e] text-[#94a3b8] hover:border-[#4a4d5e]'
+                    }`}>{val ? 'YES' : 'NO'}</button>
+                )
+
+                return (
+                  <>
+                    {/* Machine Details */}
+                    <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Machine Details</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className={labelCls}>Contact Name</label>
+                          <input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="—" className={inputCls} />
+                        </div>
+                        <div><label className={labelCls}>Contact Phone</label>
+                          <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="—" className={inputCls} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className={labelCls}>Accessories</label>
+                          <input value={machineAccessories} onChange={e => setMachineAccessories(e.target.value)} placeholder="—" className={inputCls} />
+                        </div>
+                        <div><label className={labelCls}>Time</label>
+                          <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} className={inputCls} />
+                        </div>
+                      </div>
+                      {hasDel && (
+                        <div>
+                          <label className={labelCls}>Install IDCA</label>
+                          <div className="flex items-center gap-2">
+                            <YNBtn val={true} cur={installIdca} onSet={setInstallIdca} color="green" />
+                            <YNBtn val={false} cur={installIdca} onSet={setInstallIdca} color="red" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Address */}
+                    {needsAddr && (
+                      <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">
+                          {hasRel ? 'Relocation Addresses' : 'Delivery Address'}
+                        </p>
+                        {hasRel && (
+                          <div><label className={labelCls}>Address FROM</label>
+                            <input value={addressFrom} onChange={e => setAddressFrom(e.target.value)} placeholder="Collection address" className={inputCls} />
+                          </div>
+                        )}
+                        <div><label className={labelCls}>{hasRel ? 'Address TO' : 'Delivery Address'}</label>
+                          <input value={addressTo} onChange={e => setAddressTo(e.target.value)} placeholder="Delivery address" className={inputCls} />
+                        </div>
+                        <div className="space-y-2">
+                          <div>
+                            <label className={labelCls}>Stair Walker</label>
+                            <div className="flex items-center gap-2">
+                              <YNBtn val={true} cur={stairWalker} onSet={setStairWalker} color="green" />
+                              <YNBtn val={false} cur={stairWalker} onSet={setStairWalker} color="red" />
+                              <input value={stairWalkerComment} onChange={e => setStairWalkerComment(e.target.value)} placeholder="Comment…" className={`${inputCls} flex-1`} />
+                            </div>
+                          </div>
+                          <div>
+                            <label className={labelCls}>Parking</label>
+                            <div className="flex items-center gap-2">
+                              <YNBtn val={true} cur={parkingYn} onSet={setParkingYn} color="green" />
+                              <YNBtn val={false} cur={parkingYn} onSet={setParkingYn} color="red" />
+                              <input value={parkingComment} onChange={e => setParkingComment(e.target.value)} placeholder="Parking notes…" className={`${inputCls} flex-1`} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pick-Up */}
+                    {hasPick && (
+                      <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Pick-Up Details</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div><label className={labelCls}>Pick-Up Model</label>
+                            <input value={pickupModel} onChange={e => setPickupModel(e.target.value)} placeholder="—" className={inputCls} />
+                          </div>
+                          <div><label className={labelCls}>Pick-Up Serial</label>
+                            <input value={pickupSerial} onChange={e => setPickupSerial(e.target.value)} placeholder="—" className={inputCls} />
+                          </div>
+                        </div>
+                        <div><label className={labelCls}>Pick-Up Accessories</label>
+                          <input value={pickupAccessories} onChange={e => setPickupAccessories(e.target.value)} placeholder="—" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Disposition</label>
+                          <div className="flex flex-wrap gap-2">
+                            {['Recycle', 'Refurb', 'Loan', 'Scrap'].map(d => (
+                              <button key={d} type="button" onClick={() => setPickupDisposition(p => p === d ? '' : d)}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                                  pickupDisposition === d ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'border-[#2a2d3e] text-[#94a3b8] hover:border-[#4a4d5e]'
+                                }`}>{d}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Special Instructions */}
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-2">Special Instructions</p>
+                      <textarea value={specialInstructions} onChange={e => setSpecialInstructions(e.target.value)}
+                        rows={3} placeholder="e.g. Call 30 mins prior, loading dock at rear…"
+                        className="w-full rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] placeholder:text-[#94a3b8]/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" />
+                    </div>
+                  </>
+                )
+              })()}
+
               {/* Notes */}
               <div>
-                <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-2">Notes</p>
+                <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-2">Internal Notes</p>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  rows={4}
-                  placeholder="Add notes…"
+                  rows={3}
+                  placeholder="Internal notes (not printed)…"
                   className="w-full rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] placeholder:text-[#94a3b8]/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
                 />
               </div>
 
-              {/* AOD Section */}
+              {/* EFEX AOD Section */}
               <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130]">
-                <p className="text-sm font-semibold text-[#f1f5f9] mb-3">Acknowledgment of Delivery (AOD)</p>
-
-                {job?.aod_signed_at ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                      <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-                      <div>
-                        <p className="text-sm text-green-400 font-medium">AOD Signed</p>
-                        <p className="text-xs text-[#94a3b8]">{new Date(job.aod_signed_at).toLocaleString('en-AU')}</p>
+                <p className="text-sm font-semibold text-[#f1f5f9] mb-3">📎 EFEX AOD</p>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={hasAod} onChange={e => setHasAod(e.target.checked)} className="w-4 h-4 accent-orange-500" />
+                    <span className="text-sm text-[#f1f5f9]">EFEX has sent AOD PDF for this job</span>
+                  </label>
+                  {job?.aod_pdf_url ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <FileText className="w-4 h-4 text-green-400 shrink-0" />
+                        <p className="text-sm text-green-400 font-medium">EFEX AOD PDF attached</p>
                       </div>
-                    </div>
-                    {aodMessage && (
-                      <p className="text-xs text-green-400">{aodMessage}</p>
-                    )}
-                    <div className="flex items-center gap-2">
-                      {job.aod_pdf_url && (
-                        <a
-                          href={job.aod_pdf_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1"
-                        >
+                      <div className="flex gap-2">
+                        <a href={job.aod_pdf_url} target="_blank" rel="noopener noreferrer" className="flex-1">
                           <Button variant="outline" size="sm" className="w-full flex items-center gap-2">
-                            <Download className="w-4 h-4" />
-                            Download PDF
+                            <Download className="w-4 h-4" />Download
                           </Button>
                         </a>
-                      )}
-                      <Button
-                        size="sm"
-                        onClick={async () => {
-                          setAodSending(true)
-                          setAodMessage(null)
-                          try {
-                            const res = await fetch(`/api/jobs/${job.id}/aod/send`, { method: 'POST' })
-                            if (res.ok) {
-                              setAodMessage('✅ AOD emailed to Onur successfully')
-                            } else {
-                              const d = await res.json() as { error?: string }
-                              setAodMessage(`❌ ${d.error ?? 'Send failed'}`)
-                            }
-                          } catch {
-                            setAodMessage('❌ Network error')
-                          } finally {
-                            setAodSending(false)
-                          }
-                        }}
-                        disabled={aodSending}
-                        className="flex-1 flex items-center gap-2"
-                      >
-                        {aodSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        {aodSending ? 'Sending…' : 'Send to Email'}
-                      </Button>
+                        <a href={job.aod_pdf_url} target="_blank" rel="noopener noreferrer" onClick={() => setTimeout(() => window.print(), 500)} className="flex-1">
+                          <Button size="sm" className="w-full flex items-center gap-2">
+                            <Printer className="w-4 h-4" />Print AOD
+                          </Button>
+                        </a>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-xs text-[#94a3b8]">
-                      Get the customer to sign on-screen to generate a PDF acknowledgment of delivery.
-                    </p>
-                    {aodMessage && (
-                      <p className="text-xs text-red-400">{aodMessage}</p>
-                    )}
-                    <Button
-                      onClick={() => setShowSignaturePad(true)}
-                      disabled={aodGenerating}
-                      className="w-full flex items-center gap-2"
-                      size="sm"
-                    >
-                      {aodGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenLine className="w-4 h-4" />}
-                      {aodGenerating ? 'Generating AOD…' : 'Get Customer Signature'}
-                    </Button>
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-xs text-[#94a3b8]">AOD will auto-attach when EFEX emails it. Check back after receiving their email.</p>
+                  )}
+                </div>
               </div>
+
             </div>
           )}
         </div>
@@ -709,13 +867,16 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         {/* Footer */}
         {!loading && job && (
           <div className="px-5 py-4 border-t border-[#2a2d3e] flex items-center justify-between gap-3 shrink-0">
-            <p className="text-xs text-[#94a3b8]">
-              Created {formatDate(job.created_at)}
-            </p>
+            <a href={`/jobs/${job.id}/print`} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" size="sm" className="flex items-center gap-2">
+                <Printer className="w-4 h-4" />
+                Print Card
+              </Button>
+            </a>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
               <Button size="sm" onClick={handleSave} disabled={saving}>
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save changes'}
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
               </Button>
             </div>
           </div>

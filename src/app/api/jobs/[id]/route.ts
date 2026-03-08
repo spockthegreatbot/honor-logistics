@@ -12,6 +12,12 @@ const statusEmoji: Record<string, string> = {
 const JOB_PATCH_FIELDS = [
   'status', 'assigned_to', 'scheduled_date', 'notes', 'po_number', 'client_id', 'end_customer_id',
   'billing_cycle_id', 'completed_at', 'client_reference', 'parent_job_id',
+  // EFEX order fields
+  'order_types', 'contact_name', 'contact_phone', 'scheduled_time', 'machine_accessories',
+  'install_idca', 'address_to', 'address_from', 'stair_walker', 'stair_walker_comment',
+  'parking', 'parking_comment', 'pickup_model', 'pickup_accessories', 'pickup_serial',
+  'pickup_disposition', 'special_instructions', 'has_aod', 'aod_pdf_url', 'aod_signed_at',
+  'serial_number', 'job_type',
 ]
 
 export async function PATCH(
