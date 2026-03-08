@@ -24,19 +24,8 @@ const GROUP_CHAT_ID = envVars.HONOR_GROUP_CHAT_ID
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
 
-import { execSync } from 'child_process'
-
-function sendTelegram(text) {
-  if (!BOT_TOKEN || !GROUP_CHAT_ID) return
-  try {
-    const payload = JSON.stringify({ chat_id: GROUP_CHAT_ID, text, parse_mode: 'HTML' })
-    execSync(`curl -s --max-time 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-      -H "Content-Type: application/json" \
-      -d '${payload.replace(/'/g, `'\\''`)}'`, { stdio: 'pipe' })
-  } catch (e) {
-    console.error('  Telegram error:', e.message?.slice(0, 80))
-  }
-}
+// Telegram alerts disabled — Honor bot handles orders directly in group
+function sendTelegram(_text) { return }
 
 const SKIP_REFS = new Set(['example', 'here', 'this', 'note', 'info', 'email', 'http', 'https'])
 
