@@ -105,8 +105,79 @@ export function CalendarClient({ jobs }: Props) {
     return [...leading, ...days]
   })() : days
 
+  // ── Mobile list view (sm and below) ─────────────────────
+  const mobileView = (
+    <div className="p-4 space-y-4 lg:hidden">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-[#f1f5f9]">Calendar</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={prev} className="h-8 w-8">
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <span className="text-xs font-semibold text-[#f1f5f9] min-w-[130px] text-center">{periodLabel}</span>
+          <Button variant="ghost" size="icon" onClick={next} className="h-8 w-8">
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={goToday} className="text-xs">Today</Button>
+        <div className="flex items-center rounded-lg border border-[#2a2d3e] overflow-hidden">
+          {(['week', 'month'] as const).map((m) => (
+            <button key={m} onClick={() => setViewMode(m)}
+              className={`px-3 py-1.5 text-xs font-medium transition capitalize ${viewMode === m ? 'bg-[#2a2d3e] text-[#f1f5f9]' : 'text-[#94a3b8]'}`}>
+              {m}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Days as a vertical list */}
+      <div className="space-y-3">
+        {days.map((day) => {
+          const dayJobs = jobsForDay(day)
+          const isCurrentDay = isToday(day)
+          return (
+            <div key={day.toISOString()} className={`rounded-xl border ${isCurrentDay ? 'border-orange-500/40 bg-orange-500/5' : 'border-[#2a2d3e] bg-[#1e2130]'}`}>
+              <div className={`px-3 py-2 border-b border-[#2a2d3e] flex items-center gap-2`}>
+                <span className={`text-sm font-bold ${isCurrentDay ? 'text-orange-400' : 'text-[#f1f5f9]'}`}>
+                  {format(day, 'EEE')}
+                </span>
+                <span className={`text-xs ${isCurrentDay ? 'text-orange-300' : 'text-[#94a3b8]'}`}>
+                  {format(day, 'd MMM')}
+                </span>
+                {isCurrentDay && <span className="ml-auto text-xs text-orange-400 font-medium">Today</span>}
+                {dayJobs.length > 0 && (
+                  <span className="ml-auto text-xs text-[#94a3b8]">{dayJobs.length} job{dayJobs.length > 1 ? 's' : ''}</span>
+                )}
+              </div>
+              {dayJobs.length > 0 ? (
+                <div className="p-2 space-y-1.5">
+                  {dayJobs.map((job) => {
+                    const style = JOB_TYPE_STYLES[job.job_type] ?? { bg: 'bg-[#2a2d3e] border-[#363a52]', text: 'text-[#94a3b8]', dot: 'bg-[#94a3b8]' }
+                    return (
+                      <button key={job.id} onClick={() => setSelectedJobId(job.id)}
+                        className={`w-full text-left rounded-lg border px-3 py-2 flex items-center gap-2 ${style.bg} ${style.text} hover:opacity-80 transition`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
+                        <span className="text-xs font-bold">#{String(job.job_number ?? job.id).slice(-6).toUpperCase()}</span>
+                        <span className="text-xs opacity-80 flex-1 truncate">{job.clients?.name ?? jobTypeLabel(job.job_type)}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="px-3 py-2 text-xs text-[#94a3b8]/40">No jobs</p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+
   return (
-    <div className="p-6 space-y-5">
+    <>
+    <div className="p-6 space-y-5 hidden lg:block">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-[#f1f5f9]">Calendar</h1>
@@ -268,5 +339,9 @@ export function CalendarClient({ jobs }: Props) {
         />
       )}
     </div>
+
+    {/* Mobile view */}
+    {mobileView}
+    </>
   )
 }
