@@ -164,8 +164,12 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         setClientId(j.client_id ?? '')
         setEndCustomerId(j.end_customer_id ?? '')
         setAssignedTo(j.assigned_to ?? '')
-        // EFEX fields
-        setOrderTypes(j.order_types ?? [])
+        // EFEX fields — fall back to job_type when order_types not yet set
+        const EFEX_TYPES = ['delivery', 'installation', 'pickup', 'relocation']
+        const loadedOrderTypes = (j.order_types && j.order_types.length > 0)
+          ? j.order_types
+          : (EFEX_TYPES.includes(j.job_type) ? [j.job_type] : [])
+        setOrderTypes(loadedOrderTypes)
         setContactName(j.contact_name ?? '')
         setContactPhone(j.contact_phone ?? '')
         setScheduledTime(j.scheduled_time ?? '')

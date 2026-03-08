@@ -68,7 +68,10 @@ export default async function PrintJobPage({ params }: { params: Promise<{ id: s
   const endCustomerName = j.end_customers?.name ?? '—'
   const staffName = j.staff?.name ?? 'Unassigned'
   const machineModel = j.machines?.model ?? j.machine_model ?? '—'
-  const orderTypes: string[] = j.order_types ?? []
+  const EFEX_TYPES = ['delivery', 'installation', 'pickup', 'relocation']
+  const orderTypes: string[] = (j.order_types && j.order_types.length > 0)
+    ? j.order_types
+    : (EFEX_TYPES.includes(j.job_type) ? [j.job_type] : [])
   const orderLabel = orderTypes.length > 0
     ? orderTypes.map((t: string) => ORDER_TYPE_LABELS[t] ?? t).join(' + ')
     : j.job_type
@@ -100,9 +103,9 @@ export default async function PrintJobPage({ params }: { params: Promise<{ id: s
       <body>
         {/* Print button — hidden in print */}
         <div className="no-print" style={{ marginBottom: 16 }}>
-          <button className="print-btn" onClick={() => undefined}>🖨 Print</button>
-          <script dangerouslySetInnerHTML={{ __html: 'document.querySelector(".print-btn").onclick=()=>window.print()' }} />
+          <button className="print-btn">🖨 Print / Save PDF</button>
         </div>
+        <script dangerouslySetInnerHTML={{ __html: 'document.querySelector(".print-btn").onclick=()=>window.print(); window.onload=()=>window.print();' }} />
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, borderBottom: '2px solid #2d3748', paddingBottom: 10 }}>
