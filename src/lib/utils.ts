@@ -21,6 +21,24 @@ export function formatDate(date: string | null | undefined): string {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
+      timeZone: 'Australia/Sydney',
+    })
+  } catch {
+    return '—'
+  }
+}
+
+export function formatDateTime(date: string | null | undefined): string {
+  if (!date) return '—'
+  try {
+    const d = new Date(date)
+    return d.toLocaleString('en-AU', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Australia/Sydney',
     })
   } catch {
     return '—'
