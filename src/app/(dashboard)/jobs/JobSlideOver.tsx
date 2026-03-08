@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { X, CheckCircle2, AlertCircle, Loader2, PenLine, Download, Send } from 'lucide-react'
+import { SignaturePad } from '@/components/aod/SignaturePad'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatDate, jobTypeLabel, jobStatusLabel } from '@/lib/utils'
@@ -57,6 +58,8 @@ interface Job {
   parent_job_id: string | null
   created_at: string | null
   updated_at: string | null
+  aod_pdf_url?: string | null
+  aod_signed_at?: string | null
   clients?: { name: string } | null
   end_customers?: { name: string; address?: string | null; contact_name?: string | null; contact_phone?: string | null } | null
   staff?: { name: string } | null
@@ -104,6 +107,10 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
   const [clients, setClients] = useState<SelectOption[]>([])
   const [endCustomers, setEndCustomers] = useState<SelectOption[]>([])
   const [staffList, setStaffList] = useState<SelectOption[]>([])
+  const [showSignaturePad, setShowSignaturePad] = useState(false)
+  const [aodGenerating, setAodGenerating] = useState(false)
+  const [aodSending, setAodSending] = useState(false)
+  const [aodMessage, setAodMessage] = useState<string | null>(null)
 
   const fetchJob = useCallback(async () => {
     try {
@@ -580,9 +587,124 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                   className="w-full rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] placeholder:text-[#94a3b8]/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
                 />
               </div>
+
+              {/* AOD Section */}
+              <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130]">
+                <p className="text-sm font-semibold text-[#f1f5f9] mb-3">Acknowledgment of Delivery (AOD)</p>
+
+                {job?.aod_signed_at ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                      <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                      <div>
+                        <p className="text-sm text-green-400 font-medium">AOD Signed</p>
+                        <p className="text-xs text-[#94a3b8]">{new Date(job.aod_signed_at).toLocaleString('en-AU')}</p>
+                      </div>
+                    </div>
+                    {aodMessage && (
+                      <p className="text-xs text-green-400">{aodMessage}</p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      {job.aod_pdf_url && (
+                        <a
+                          href={job.aod_pdf_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1"
+                        >
+                          <Button variant="outline" size="sm" className="w-full flex items-center gap-2">
+                            <Download className="w-4 h-4" />
+                            Download PDF
+                          </Button>
+                        </a>
+                      )}
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          setAodSending(true)
+                          setAodMessage(null)
+                          try {
+                            const res = await fetch(`/api/jobs/${job.id}/aod/send`, { method: 'POST' })
+                            if (res.ok) {
+                              setAodMessage('✅ AOD emailed to Onur successfully')
+                            } else {
+                              const d = await res.json() as { error?: string }
+                              setAodMessage(`❌ ${d.error ?? 'Send failed'}`)
+                            }
+                          } catch {
+                            setAodMessage('❌ Network error')
+                          } finally {
+                            setAodSending(false)
+                          }
+                        }}
+                        disabled={aodSending}
+                        className="flex-1 flex items-center gap-2"
+                      >
+                        {aodSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        {aodSending ? 'Sending…' : 'Send to Email'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-[#94a3b8]">
+                      Get the customer to sign on-screen to generate a PDF acknowledgment of delivery.
+                    </p>
+                    {aodMessage && (
+                      <p className="text-xs text-red-400">{aodMessage}</p>
+                    )}
+                    <Button
+                      onClick={() => setShowSignaturePad(true)}
+                      disabled={aodGenerating}
+                      className="w-full flex items-center gap-2"
+                      size="sm"
+                    >
+                      {aodGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenLine className="w-4 h-4" />}
+                      {aodGenerating ? 'Generating AOD…' : 'Get Customer Signature'}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
+
+        {/* Signature Pad Overlay */}
+        {job && (
+          <SignaturePad
+            isOpen={showSignaturePad}
+            onClose={() => setShowSignaturePad(false)}
+            jobNumber={job.job_number}
+            onConfirm={async (signatureDataUrl) => {
+              setShowSignaturePad(false)
+              setAodGenerating(true)
+              setAodMessage(null)
+              try {
+                const res = await fetch(`/api/jobs/${job.id}/aod/generate`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ signatureDataUrl }),
+                })
+                if (res.ok) {
+                  // Refresh job to get aod_pdf_url + aod_signed_at
+                  const refresh = await fetch(`/api/jobs/${job.id}`)
+                  if (refresh.ok) {
+                    const { job: updated } = await refresh.json() as { job: Job }
+                    setJob(updated)
+                    if (onJobUpdated) onJobUpdated(updated)
+                  }
+                } else {
+                  const d = await res.json() as { error?: string }
+                  setAodMessage(`❌ ${d.error ?? 'Generation failed'}`)
+                }
+              } catch {
+                setAodMessage('❌ Network error generating AOD')
+              } finally {
+                setAodGenerating(false)
+              }
+            }}
+          />
+        )}
 
         {/* Footer */}
         {!loading && job && (
