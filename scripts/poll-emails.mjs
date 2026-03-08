@@ -151,10 +151,13 @@ async function createJobFromEmail(body, subject) {
       }
     }
 
-    const { count } = await supabase.from('jobs').select('*', { count: 'exact', head: true })
+    // Use MAX job_number to avoid collisions (count-based breaks on deletes)
     const year = new Date().getFullYear()
-    const seq = String((count ?? 0) + 1).padStart(4, '0')
-    const jobNumber = `HRL-${year}-${seq}`
+    const { data: lastJob } = await supabase.from('jobs')
+      .select('job_number').ilike('job_number', `HRL-${year}-%`)
+      .order('job_number', { ascending: false }).limit(1).single()
+    const lastSeq = lastJob?.job_number ? parseInt(lastJob.job_number.split('-')[2] ?? '0') : 0
+    const jobNumber = `HRL-${year}-${String(lastSeq + 1).padStart(4, '0')}`
 
     const { data: newJob, error } = await supabase.from('jobs').insert({
       job_number: jobNumber,
@@ -250,9 +253,14 @@ async function run() {
 
     if (aodAttach) {
       console.log(`  📎 AOD PDF: ${aodAttach.filename}`)
-      // Upload + attach to job (simplified)
-      await sendTelegram(`📎 <b>EFEX AOD PDF received</b>\nFile: ${aodAttach.filename}\nFrom: ${fromName}\n\n🔗 https://crm.honorremovals.com.au/jobs`)
-    } else if (isEfexJobRequest(subject, body, from)) {
+      // Also create a job if the email body is a job request (e.g. install booking + AOD together)
+      if (isEfexJobRequest(subject, body, from)) {
+        console.log(`  🆕 Also a job request — creating job`)
+        await createJobFromEmail(body, subject)
+      }
+    }
+
+    if (!aodAttach && isEfexJobRequest(subject, body, from)) {
       console.log(`  🆕 EFEX job request detected`)
       const result = await createJobFromEmail(body, subject)
 
