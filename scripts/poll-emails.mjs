@@ -95,6 +95,9 @@ async function extractDocxData(buffer) {
   }
 }
 
+// Sanitize extracted values — null out empty, "null", "N/A", "-"
+const cleanVal = (v) => (!v || v === 'null' || v.trim() === '' || v === 'N/A' || v === 'n/a' || v === '-') ? null : v.trim()
+
 // Parse the EFEX "Pick-Up / Delivery Install Request" form using HTML table structure
 function parseEfexForm({ raw, html }, subject = '') {
   // Extract all <td> cell contents as clean text
@@ -106,26 +109,54 @@ function parseEfexForm({ raw, html }, subject = '') {
     cells.push(cellText)
   }
 
-  // Build label→value map from adjacent cells
-  const lv = {}
-  for (let i = 0; i < cells.length - 1; i++) {
-    const k = cells[i].toUpperCase().replace(/[^A-Z0-9\s\/&]/g, '').trim()
-    const v = cells[i + 1].trim()
-    if (k.length >= 3 && k.length <= 60 && v) lv[k] = v
+  // Normalize cell text for label comparison
+  const norm = (s) => s.toUpperCase().replace(/[^A-Z0-9\s\/&]/g, '').replace(/\s+/g, ' ').trim()
+
+  // Known header keywords — a value that's entirely composed of these is likely a label, not data
+  const HEADER_WORDS = /^(MODEL|PART|NUMBER|ACCESSORIES|ACCESSORY|SERIAL|S\/N|NO|RECYCLE|REFURB|LOAN|SCRAP|PICK.?UP|DELIVERY|INSTALL|COLLECTION|ORDER|TYPE|DATE|ADDRESS|CONTACT|CUSTOMER|COMPANY|CLIENT|COMMENT|YES|NO|NAME|PHONE|EMAIL|STAIR|WALKER|PARKING|DISPOSITION|IDCA|SPECIAL|INSTRUCTIONS|TIME|BEST|SITE|ON|AND|OR|OF|THE|&|\/|\s)+$/i
+
+  // Check if a cell looks like a header/label rather than actual data
+  function looksLikeHeader(v) {
+    if (!v) return false
+    return HEADER_WORDS.test(v.trim())
   }
 
-  function get(...labels) {
-    for (const l of labels) {
-      for (const [k, v] of Object.entries(lv)) {
-        if (k.includes(l.toUpperCase()) && v && v.length > 1) return v
+  // Find the first non-empty value cell after a label cell at index i
+  // Skips empty cells and cells that look like headers, checks up to N+3
+  function valueAfter(i) {
+    for (let offset = 1; offset <= 3 && i + offset < cells.length; offset++) {
+      const v = cells[i + offset]?.trim()
+      if (v && v.length > 0 && !looksLikeHeader(v)) return v
+    }
+    return null
+  }
+
+  // Search cells for a label matching any variant, return the value from the next non-empty cell
+  // opts.excludePrefix: skip cells whose norm starts with this prefix (e.g. 'PICKUP' to avoid pickup section)
+  function get(labels, opts = {}) {
+    if (typeof labels === 'string') labels = [labels]
+    const upperLabels = labels.map(l => norm(l))
+    const excl = opts.excludePrefix ? norm(opts.excludePrefix) : null
+    for (let i = 0; i < cells.length; i++) {
+      const cellNorm = norm(cells[i])
+      if (cellNorm.length < 2 || cellNorm.length > 60) continue
+      if (excl && cellNorm.startsWith(excl)) continue
+      for (const label of upperLabels) {
+        if (cellNorm === label || cellNorm.includes(label)) {
+          const v = cleanVal(valueAfter(i))
+          if (v && v.length > 1) return v
+        }
       }
     }
     return null
   }
 
-  // Customer — stop before ORDER TYPE
-  const customerRaw = get('CUSTOMER')
-  const customerName = customerRaw?.split(/ORDER TYPE|DELIVERY DATE|BEST CONTACT/i)[0].trim() || customerRaw
+  // Convenience: get with varargs (original signature, no options)
+  function getAny(...labels) { return get(labels) }
+
+  // Customer — try multiple label variants
+  const customerRaw = getAny('CUSTOMER', 'COMPANY NAME', 'COMPANY', 'CLIENT NAME', 'CLIENT', 'CUSTOMER NAME')
+  const customerName = cleanVal(customerRaw?.split(/ORDER TYPE|DELIVERY DATE|BEST CONTACT/i)[0]?.trim()) || cleanVal(customerRaw)
 
   // Order types: look at ORDER TYPE row cells for ☑ or bold/checked markers
   // EFEX docx uses Word checkbox controls — we look for cell patterns
@@ -152,47 +183,71 @@ function parseEfexForm({ raw, html }, subject = '') {
   }
 
   // Date
-  const dateRaw = get('DELIVERY DATE', 'INSTALL DATE', 'DATE')
+  const dateRaw = getAny('DELIVERY DATE', 'INSTALL DATE', 'COLLECTION DATE', 'PICKUP DATE', 'DATE')
   const scheduledDate = (dateRaw ? extractDate(dateRaw) : null) ?? extractDate(subject)
 
   // Contact — "Celia - 02 8890 7484"
-  const contactRaw = get('BEST CONTACT', 'CONTACT ON SITE', 'CONTACT NAME & NUMBER', 'CONTACT')
+  const contactRaw = getAny('BEST CONTACT', 'CONTACT ON SITE', 'CONTACT NAME & NUMBER', 'CONTACT NAME', 'CONTACT NUMBER', 'CONTACT')
   let contactName = null, contactPhone = null
   if (contactRaw) {
     const phoneM = contactRaw.match(/(\(?\d[\d\s\-\(\)]{7,})/)
     if (phoneM) {
-      contactPhone = phoneM[1].trim()
-      contactName = contactRaw.slice(0, phoneM.index).replace(/[-,\s]+$/, '').trim() || null
+      contactPhone = cleanVal(phoneM[1])
+      contactName = cleanVal(contactRaw.slice(0, phoneM.index).replace(/[-,\s]+$/, ''))
     } else {
-      contactName = contactRaw.slice(0, 80)
+      contactName = cleanVal(contactRaw.slice(0, 80))
     }
   }
 
-  // Machine — MODEL/PART NUMBER cell, then same row SERIAL NUMBER cell
-  // Find the row: cells = [..., "MODEL /PART NUMBER", "ACCESSORIES / PART NUMBER", "SERIAL NUMBER", modelVal, accVal, serialVal, ...]
-  const modelLabelIdx = cells.findIndex(c => /model.*part/i.test(c))
+  // Machine — try multiple label strategies
   let machineModel = null, machineSerial = null, machineAccessories = null
+
+  // Strategy 1: Original header-row approach (MODEL/PART NUMBER + ACCESSORIES + SERIAL in a header row)
+  const modelLabelIdx = cells.findIndex(c => /model.*part/i.test(c))
   if (modelLabelIdx >= 0) {
-    // Data row starts after the 3 header cells
-    const dataStart = modelLabelIdx + 3
-    machineModel = cells[dataStart]?.trim() || null
-    machineAccessories = cells[dataStart + 1]?.trim() || null
-    machineSerial = cells[dataStart + 2]?.trim() || null
-    // Clean up — remove trailing label words
-    machineModel = machineModel?.replace(/ACCESSORIES|SERIAL|INSTALL|ADDRESS/gi, '').trim() || null
-    machineSerial = machineSerial?.replace(/INSTALL|ADDRESS|YES|NO/gi, '').trim() || null
+    // Count how many header cells follow in this row (look for ACCESSORIES, SERIAL labels)
+    let headerCount = 1
+    for (let j = modelLabelIdx + 1; j < Math.min(modelLabelIdx + 5, cells.length); j++) {
+      const cn = norm(cells[j])
+      if (/ACCESSOR|SERIAL/.test(cn)) headerCount++
+      else break
+    }
+    const dataStart = modelLabelIdx + headerCount
+    machineModel = cleanVal(cells[dataStart])
+    if (headerCount >= 3) {
+      machineAccessories = cleanVal(cells[dataStart + 1])
+      machineSerial = cleanVal(cells[dataStart + 2])
+    } else if (headerCount === 2) {
+      machineSerial = cleanVal(cells[dataStart + 1])
+    }
+    // Clean up — remove trailing label words that leaked into values
+    if (machineModel) machineModel = cleanVal(machineModel.replace(/ACCESSORIES|SERIAL|INSTALL|ADDRESS/gi, ''))
+    if (machineSerial) machineSerial = cleanVal(machineSerial.replace(/INSTALL|ADDRESS|YES|NO/gi, ''))
+  }
+
+  // Strategy 2: Individual label search fallback (for COLLECTION forms and GME)
+  // Exclude pickup-prefixed cells to avoid mixing up delivery vs pickup fields
+  const noPickup = { excludePrefix: 'PICKUP' }
+  if (!machineModel) {
+    machineModel = cleanVal(get(['MODEL', 'MACHINE MODEL', 'MODEL NO', 'MODEL NUMBER', 'PART NUMBER', 'MODEL / PART NUMBER', 'MODEL/PART'], noPickup))
+  }
+  if (!machineSerial) {
+    machineSerial = cleanVal(get(['SERIAL', 'SERIAL NO', 'SERIAL NUMBER', 'S/N', 'SERIAL #'], noPickup))
+  }
+  if (!machineAccessories) {
+    machineAccessories = cleanVal(get(['ACCESSORIES', 'ACCESSORY', 'ACCESSORY PART NUMBER', 'ACCESSORY PART', 'ACC', 'ACCESSORIES PART NUMBER'], noPickup))
   }
 
   // Install IDCA — parser unreliable, always null (set manually in CRM)
   const installIdca = null
 
   // Address
-  const addressRaw = get('ADDRESS')
-  const address = addressRaw?.slice(0, 200).trim() || null
+  const addressRaw = getAny('ADDRESS', 'DELIVERY ADDRESS', 'SITE ADDRESS', 'INSTALL ADDRESS', 'COLLECTION ADDRESS')
+  const address = cleanVal(addressRaw?.slice(0, 200))
 
   // Stair walker / parking
-  const stairRaw = get('STAIR WALKER', 'STAIRWALKER')
-  const parkRaw = get('PARKING')
+  const stairRaw = getAny('STAIR WALKER', 'STAIRWALKER')
+  const parkRaw = getAny('PARKING')
   let stairWalker = null, parkingYn = null
   if (stairRaw) {
     if (/\bYES\b/i.test(stairRaw) && !/\bNO\b/i.test(stairRaw)) stairWalker = true
@@ -202,23 +257,23 @@ function parseEfexForm({ raw, html }, subject = '') {
     if (/\bYES\b/i.test(parkRaw) && !/\bNO\b/i.test(parkRaw)) parkingYn = true
     else if (/\bNO\b/i.test(parkRaw)) parkingYn = false
   }
-  const stairComment = stairRaw?.replace(/YES|NO|COMMENT[:;]?\s*/gi, '').trim() || null
-  const parkComment = parkRaw?.replace(/YES|NO|COMMENT[:;]?\s*/gi, '').trim() || null
+  const stairComment = cleanVal(stairRaw?.replace(/YES|NO|COMMENT[:;]?\s*/gi, ''))
+  const parkComment = cleanVal(parkRaw?.replace(/YES|NO|COMMENT[:;]?\s*/gi, ''))
 
   // Pick-up section
   const pickupLabelIdx = cells.findIndex(c => /pick.?up\s*model/i.test(c))
   let pickupModel = null, pickupAccessories = null, pickupSerial = null, pickupDisposition = null
   if (pickupLabelIdx >= 0) {
     const dataStart = pickupLabelIdx + 4 // after 4 header cells
-    pickupModel = cells[dataStart]?.trim() || null
-    pickupAccessories = cells[dataStart + 1]?.trim() || null
-    pickupSerial = cells[dataStart + 2]?.trim() || null
-    pickupDisposition = cells[dataStart + 3]?.trim() || null
+    pickupModel = cleanVal(cells[dataStart])
+    pickupAccessories = cleanVal(cells[dataStart + 1])
+    pickupSerial = cleanVal(cells[dataStart + 2])
+    pickupDisposition = cleanVal(cells[dataStart + 3])
   }
 
   // Special instructions
   const siRaw = raw.match(/SPECIAL\s*INSTRUCTIONS[:\s]*([^\n]{5,}(?:\n(?!^[A-Z\s]+:)[^\n]*)*)/im)
-  const specialInstructions = siRaw?.[1]?.trim().slice(0, 400) ?? get('SPECIAL INSTRUCTIONS')
+  const specialInstructions = cleanVal(siRaw?.[1]?.slice(0, 400)) ?? cleanVal(getAny('SPECIAL INSTRUCTIONS'))
 
   // EFEX reference — only accept numeric refs
   const efexRef = (() => {
@@ -229,25 +284,25 @@ function parseEfexForm({ raw, html }, subject = '') {
   })()
 
   return {
-    customerName: customerName?.slice(0, 120) ?? null,
+    customerName: cleanVal(customerName?.slice(0, 120)),
     orderTypes,
     scheduledDate,
-    contactName: contactName?.slice(0, 80) ?? null,
-    contactPhone: contactPhone?.replace(/\s+/g, ' ').slice(0, 20) ?? null,
-    machineModel: machineModel?.slice(0, 100) ?? null,
-    machineSerial: machineSerial?.slice(0, 50) ?? null,
-    machineAccessories: machineAccessories?.slice(0, 100) || null,
+    contactName: cleanVal(contactName?.slice(0, 80)),
+    contactPhone: cleanVal(contactPhone?.replace(/\s+/g, ' ').slice(0, 20)),
+    machineModel: cleanVal(machineModel?.slice(0, 100)),
+    machineSerial: cleanVal(machineSerial?.slice(0, 50)),
+    machineAccessories: cleanVal(machineAccessories?.slice(0, 100)),
     installIdca,
-    address: address?.slice(0, 200) ?? null,
+    address: cleanVal(address?.slice(0, 200)),
     stairWalker,
-    stairWalkerComment: stairComment?.slice(0, 100) ?? null,
+    stairWalkerComment: cleanVal(stairComment?.slice(0, 100)),
     parking: parkingYn,
-    parkingComment: parkComment?.slice(0, 100) ?? null,
-    pickupModel: pickupModel?.slice(0, 100) ?? null,
-    pickupSerial: pickupSerial?.slice(0, 50) ?? null,
-    pickupAccessories: pickupAccessories?.slice(0, 100) ?? null,
-    pickupDisposition: pickupDisposition?.slice(0, 50) ?? null,
-    specialInstructions: specialInstructions?.slice(0, 400) ?? null,
+    parkingComment: cleanVal(parkComment?.slice(0, 100)),
+    pickupModel: cleanVal(pickupModel?.slice(0, 100)),
+    pickupSerial: cleanVal(pickupSerial?.slice(0, 50)),
+    pickupAccessories: cleanVal(pickupAccessories?.slice(0, 100)),
+    pickupDisposition: cleanVal(pickupDisposition?.slice(0, 50)),
+    specialInstructions: cleanVal(specialInstructions?.slice(0, 400)),
     efexRef,
   }
 }
@@ -295,8 +350,8 @@ async function createJobFromEmail(body, subject, docx = null) {
     const contactPhone = d.contactPhone ?? extractField(combined, 'phone', 'mobile', 'tel', 'contact number')
     const scheduledDate = d.scheduledDate ?? extractDate(subject) ?? extractDate(combined)
     const scheduledTime = extractField(combined, 'time', 'delivery time', 'arrival time')
-    const machineSerial = d.machineSerial ?? extractField(combined, 'serial', 's/n', 'serial number')
-    const machineAccessories = d.machineAccessories ?? null
+    const machineSerial = cleanVal(d.machineSerial ?? extractField(combined, 'serial', 's/n', 'serial number'))
+    const machineAccessories = cleanVal(d.machineAccessories) ?? null
     const addressTo = d.address ?? extractField(combined, 'delivery address', 'address', 'site address')
     const addressFrom = (orderTypes.includes('relocation') ? d.addressFrom ?? extractField(combined, 'collect from', 'pickup from') : null)
     const specialInstructions = d.specialInstructions ?? extractField(combined, 'special instructions', 'comments')
@@ -309,7 +364,7 @@ async function createJobFromEmail(body, subject, docx = null) {
     const pickupSerial = d.pickupSerial ?? null
     const pickupAccessories = d.pickupAccessories ?? null
     const pickupDisposition = d.pickupDisposition ?? null
-    const machineModelNote = d.machineModel ?? extractField(combined, 'model', 'machine', 'part')
+    const machineModelNote = cleanVal(d.machineModel ?? extractField(combined, 'model', 'machine', 'part'))
 
     // Check for duplicate — by ref if reliable, else by subject
     if (ref && ref.length >= 5 && !SKIP_REFS.has(ref.toLowerCase())) {
