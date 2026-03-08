@@ -148,6 +148,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
   const [pickupSerial, setPickupSerial] = useState('')
   const [pickupDisposition, setPickupDisposition] = useState('')
   const [specialInstructions, setSpecialInstructions] = useState('')
+  const [serialNumber, setSerialNumber] = useState('')
   const [hasAod, setHasAod] = useState(false)
 
   const fetchJob = useCallback(async () => {
@@ -186,6 +187,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         setPickupSerial(j.pickup_serial ?? '')
         setPickupDisposition(j.pickup_disposition ?? '')
         setSpecialInstructions(j.special_instructions ?? '')
+        setSerialNumber(j.serial_number ?? '')
         setHasAod(j.has_aod ?? false)
       }
     } catch (e) {
@@ -227,6 +229,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
           client_id: clientId || null,
           end_customer_id: endCustomerId || null,
           assigned_to: assignedTo || null,
+          serial_number: serialNumber || null,
           // EFEX fields
           order_types: orderTypes,
           contact_name: contactName || null,
@@ -324,13 +327,21 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
       <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-[#1a1d27] border-l border-[#2a2d3e] flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#2a2d3e] shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             {job && (
               <>
                 <span className="font-mono font-bold text-orange-400 text-lg">
                   #{String(job.job_number ?? job.id).slice(-6).toUpperCase()}
                 </span>
                 <StatusBadge status={job.status ?? ''} />
+                {(job.order_types ?? []).map((t: string) => {
+                  const map: Record<string, string> = { delivery: '🚚 Delivery', installation: '🔧 Installation', pickup: '📦 Pick-Up', relocation: '🔄 Relocation' }
+                  return (
+                    <span key={t} className="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-0.5 rounded-full text-xs font-semibold">
+                      {map[t] ?? t}
+                    </span>
+                  )
+                })}
               </>
             )}
           </div>
@@ -389,6 +400,12 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                     {endCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
+                {(job.end_customers?.name ?? job.notes?.match(/Customer: ([^\n]+)/)?.[1]?.trim()) && (
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Customer</p>
+                    <p className="text-sm text-[#f1f5f9] py-1">{job.end_customers?.name ?? job.notes?.match(/Customer: ([^\n]+)/)?.[1]?.trim()}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Serial</p>
                   <p className="text-sm font-mono text-[#f1f5f9] py-1">{job.serial_number ?? '—'}</p>
@@ -676,9 +693,9 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
 
                 return (
                   <>
-                    {/* Machine Details */}
+                    {/* Contact & Schedule */}
                     <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
-                      <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Machine Details</p>
+                      <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Contact &amp; Schedule</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div><label className={labelCls}>Contact Name</label>
                           <input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="—" className={inputCls} />
@@ -687,12 +704,24 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                           <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="—" className={inputCls} />
                         </div>
                       </div>
+                      <div><label className={labelCls}>Time</label>
+                        <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} className={inputCls} />
+                      </div>
+                    </div>
+
+                    {/* Machine Details */}
+                    <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Machine Details</p>
+                      <div>
+                        <label className={labelCls}>Model / Part #</label>
+                        <p className="text-sm text-[#f1f5f9] py-1">{job.notes?.match(/Machine: ([^\n]+)/)?.[1]?.trim() ?? job.machines?.model ?? '—'}</p>
+                      </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div><label className={labelCls}>Accessories</label>
+                        <div><label className={labelCls}>Accessories / Part #</label>
                           <input value={machineAccessories} onChange={e => setMachineAccessories(e.target.value)} placeholder="—" className={inputCls} />
                         </div>
-                        <div><label className={labelCls}>Time</label>
-                          <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} className={inputCls} />
+                        <div><label className={labelCls}>Serial #</label>
+                          <input value={serialNumber} onChange={e => setSerialNumber(e.target.value)} placeholder="—" className={inputCls} />
                         </div>
                       </div>
                       {hasDel && (

@@ -67,7 +67,7 @@ export default async function PrintJobPage({ params }: { params: Promise<{ id: s
   const clientName = j.clients?.name ?? '—'
   const endCustomerName = j.end_customers?.name ?? '—'
   const staffName = j.staff?.name ?? 'Unassigned'
-  const machineModel = j.machines?.model ?? j.machine_model ?? '—'
+  const machineModel = j.notes?.match(/Machine: ([^\n]+)/)?.[1]?.trim() ?? j.machines?.model ?? '—'
   const EFEX_TYPES = ['delivery', 'installation', 'pickup', 'relocation']
   const orderTypes: string[] = (j.order_types && j.order_types.length > 0)
     ? j.order_types

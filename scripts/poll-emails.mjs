@@ -183,22 +183,8 @@ function parseEfexForm({ raw, html }, subject = '') {
     machineSerial = machineSerial?.replace(/INSTALL|ADDRESS|YES|NO/gi, '').trim() || null
   }
 
-  // Install IDCA — look in cells for YES/NO after Install IDCA
-  let installIdca = null
-  const idcaIdx = cells.findIndex(c => /install\s*id?ca/i.test(c))
-  if (idcaIdx >= 0) {
-    const idcaSlice = cells.slice(idcaIdx + 1, idcaIdx + 4).join(' ')
-    if (/\bYES\b/i.test(idcaSlice) && !/☐.*YES|YES.*☐/i.test(idcaSlice)) {
-      // Heuristic: if YES appears before NO in the cell, and no unchecked marker
-      const yIdx = idcaSlice.search(/\bYES\b/i)
-      const nIdx = idcaSlice.search(/\bNO\b/i)
-      // With Word checkboxes we can't tell easily — use the raw html bold/color check
-      // For now default to as-found (will be null = unset)
-    }
-  }
-  // Fallback: look in raw text for "Install IDCA YES NO" context
-  const idcaRaw = raw.match(/Install\s*I[DC]CA\s*(YES|NO)/i)
-  if (idcaRaw) installIdca = idcaRaw[1].toLowerCase() === 'yes'
+  // Install IDCA — parser unreliable, always null (set manually in CRM)
+  const installIdca = null
 
   // Address
   const addressRaw = get('ADDRESS')
