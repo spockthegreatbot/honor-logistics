@@ -1,6 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string; numpages: number }>
-
 export interface AxusJobData {
   axusJobNumber: string
   jobType: string        // "consumable" | "delivery" | "installation"
@@ -58,6 +55,9 @@ function extract(text: string, label: string): string | null {
 }
 
 export async function parseAxusJobPdf(buffer: Buffer): Promise<AxusJobData> {
+  // Lazy-load pdf-parse to avoid module-level crashes in serverless environments
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string; numpages: number }>
   const parsed = await pdfParse(buffer)
   const text = parsed.text
 
