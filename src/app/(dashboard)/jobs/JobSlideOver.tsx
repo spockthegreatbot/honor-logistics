@@ -80,6 +80,8 @@ interface Job {
   special_instructions?: string | null
   has_aod?: boolean | null
   machine_model?: string | null
+  booking_form_url?: string | null
+  install_pdf_url?: string | null
   clients?: { name: string } | null
   end_customers?: { name: string; address?: string | null; contact_name?: string | null; contact_phone?: string | null } | null
   staff?: { name: string } | null
@@ -371,7 +373,12 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Type</p>
-                  <p className="text-sm font-medium text-[#f1f5f9]">{jobTypeLabel(job.job_type)}</p>
+                  <p className="text-sm font-medium text-[#f1f5f9]">
+                    {(job.order_types && job.order_types.length > 0)
+                      ? job.order_types.map(t => ({delivery:'Delivery',installation:'Installation',pickup:'Pick-Up',relocation:'Relocation'}[t]??t)).join(' + ')
+                      : jobTypeLabel(job.job_type)
+                    }
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Scheduled Date</p>

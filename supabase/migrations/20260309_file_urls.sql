@@ -1,0 +1,2 @@
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS booking_form_url TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS install_pdf_url TEXT;
