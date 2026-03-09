@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  serverExternalPackages: ['pdf-parse', 'imapflow', 'mailparser'],
 }
 
 export default nextConfig
