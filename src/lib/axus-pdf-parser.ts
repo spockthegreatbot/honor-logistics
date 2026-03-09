@@ -56,71 +56,105 @@ function extract(text: string, label: string): string | null {
 
 export async function parseAxusJobPdf(buffer: Buffer): Promise<AxusJobData> {
   // Lazy-load pdf-parse to avoid module-level crashes in serverless environments
+  // pdf-parse v2 uses a class API: new PDFParse({ data: buffer })
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string; numpages: number }>
-  const parsed = await pdfParse(buffer)
-  const text = parsed.text
+  const { PDFParse } = require('pdf-parse') as { PDFParse: new (opts: { data: Buffer }) => { getText: () => Promise<{ text: string }> } }
+  const parser = new PDFParse({ data: buffer })
+  const result = await parser.getText()
+  const text = result.text
 
-  // ── Job header fields ────────────────────────────────────────────────────
-  const jobNumber = extract(text, 'Job#') ?? extract(text, 'Job No') ?? extract(text, 'Job Number') ?? ''
-  const rawType = extract(text, 'Type') ?? ''
+  // Actual Axus PDF text layout (multi-column table flattened to text stream):
+  //   Priority:\nType\nStatus\n{jobNo}\n{dateIn} {priority}\n{type}\n{status}
+  //   Codes, phones, company names appear TWICE (customer col + ship-to col)
+  //   Machine: "{serial}  Serial #:  {model}  {itemCode}  Item:"
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+
+  // ── Job number: first standalone 5-6 digit number in the text ─────────────
+  const jobNumM = text.match(/\b(\d{5,6})\b/)
+  const jobNumber = jobNumM?.[1] ?? ''
+
+  // ── Job type from keyword ─────────────────────────────────────────────────
+  const rawType = lines.find(l => /^(Consumable|Installation|Delivery|Service|Collection)$/i.test(l)) ?? ''
   const jobType = mapJobType(rawType)
-  const status = extract(text, 'Status') ?? 'Booked'
-  const dateDue = parseDate(extract(text, 'Date Due'))
-  const dateOut = parseDate(extract(text, 'Date Out'))
-  const priority = extract(text, 'Priority') ?? 'Normal'
 
-  // ── Customer block ───────────────────────────────────────────────────────
-  // Customer line: "FDC Construction & Fitout Pty Ltd (Code: FDCCONS001)"
-  const customerLine = extract(text, 'Customer') ?? ''
-  const customerName = customerLine.replace(/\(Code:[^)]+\)/i, '').trim()
-  const customerCodeM = customerLine.match(/Code:\s*([^\s)]+)/i)
-  const customerCode = customerCodeM?.[1] ?? ''
+  // ── Status ────────────────────────────────────────────────────────────────
+  const status = lines.find(l => /^(Booked|In Progress|Complete|Cancelled)$/i.test(l)) ?? 'Booked'
 
-  // Address / Tel / Attn for customer block
-  // Strategy: find the "Customer:" block and parse next few lines
-  const customerBlock = extractBlock(text, 'Customer', 'Ship To')
-  const customerAddress = extractBlockField(customerBlock, 'Address') ?? ''
-  const customerPhone = extractBlockField(customerBlock, 'Tel') ?? extractBlockField(customerBlock, 'Phone') ?? ''
-  const customerAttn = extractBlockField(customerBlock, 'Attn') ?? ''
+  // ── Priority ─────────────────────────────────────────────────────────────
+  const priorityM = text.match(/\b(Normal|High|Urgent|Low)\b/i)
+  const priority = priorityM?.[1] ?? 'Normal'
 
-  // ── Ship To block ────────────────────────────────────────────────────────
-  const shipToLine = extract(text, 'Ship To') ?? ''
-  const shipToName = shipToLine.replace(/\(Code:[^)]+\)/i, '').trim()
-  const shipToCodeM = shipToLine.match(/Code:\s*([^\s)]+)/i)
-  const shipToCode = shipToCodeM?.[1] ?? ''
+  // ── Dates ─────────────────────────────────────────────────────────────────
+  const dateDueLine = text.match(/Date Due:\s*\n?(\d{1,2}\/\d{1,2}\/\d{2,4})/i)
+  const dateDue = parseDate(dateDueLine?.[1] ?? null)
+  const dateOutLine = text.match(/Date Out:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i)
+  const dateOut = parseDate(dateOutLine?.[1] ?? null)
 
-  const shipToBlock = extractBlock(text, 'Ship To', 'Machine')
-  const shipToAddress = extractBlockField(shipToBlock, 'Address') ?? ''
-  const shipToPhone = extractBlockField(shipToBlock, 'Tel') ?? extractBlockField(shipToBlock, 'Phone') ?? ''
-  const shipToAttn = extractBlockField(shipToBlock, 'Attn') ?? ''
+  // ── Customer code: alphanumeric code-like token appearing after Fax: lines ─
+  const codeM = text.match(/Tel: Fax:.*?\n([A-Z0-9]{4,20})\s/s)
+  const customerCode = codeM?.[1] ?? ''
+  const shipToCode = customerCode // same in most cases
 
-  // ── Machine ───────────────────────────────────────────────────────────────
-  const machineLine = extract(text, 'Machine') ?? ''
-  // "DocuCentre-VII C2273-4TM Fax | Item: DC7C2273-4F | Serial#: 360346"
-  const machineParts = machineLine.split(/\s*\|\s*/)
-  const machineModel = machineParts[0]?.trim() ?? ''
-  const itemPart = machineParts.find(p => /Item:/i.test(p))
-  const machineItemCode = itemPart?.replace(/Item:/i, '').trim() ?? extract(text, 'Item') ?? ''
-  const serialPart = machineParts.find(p => /Serial#?:/i.test(p))
-  const serialNumber = serialPart?.replace(/Serial#?:/i, '').trim() ?? extract(text, 'Serial#') ?? extract(text, 'Serial No') ?? ''
+  // ── Company name block: appears after the code/phone lines ────────────────
+  // Typically: "CompanyName\nStreet\nSUBURB, STATE POSTCODE"
+  // The name appears twice (customer + ship-to columns) — take first occurrence
+  const afterCode = codeM ? text.slice(text.indexOf(codeM[1])) : text
+  const companyM = afterCode.match(/\n([A-Z][^\n]{5,80})\n[^\n]+?\n([A-Z][A-Z\s,]+\d{4})/)
+  const customerName = companyM?.[1]?.trim() ?? ''
+  const shipToName = customerName
+
+  // ── Address: street + suburb state postcode ──────────────────────────────
+  const addrM = afterCode.match(/([^\n]{5,80})\n([A-Z][A-Z\s,]+(?:NSW|VIC|QLD|SA|WA|TAS|ACT|NT)\s*\d{4})/i)
+  const customerAddress = addrM ? `${addrM[1].trim()}, ${addrM[2].trim()}` : ''
+  const shipToAddress = customerAddress
+
+  // ── Phone ─────────────────────────────────────────────────────────────────
+  const phoneM = text.match(/0[2-9][\d\s]{8,12}/)
+  const customerPhone = phoneM?.[0]?.trim() ?? ''
+  const shipToPhone = customerPhone
+
+  // ── Attn: appears after "Job#\n" label ────────────────────────────────────
+  const attnM = text.match(/Job#\s*\n([^\n]{2,80})/)
+  // The name appears twice ("Rob De Cillis Rob De Cillis") — deduplicate
+  const rawAttn = attnM?.[1]?.trim() ?? ''
+  const attnWords = rawAttn.split(/\s+/)
+  const half = Math.floor(attnWords.length / 2)
+  const deduped = (half > 0 && attnWords.slice(0, half).join(' ') === attnWords.slice(half).join(' '))
+    ? attnWords.slice(0, half).join(' ')
+    : rawAttn
+  const customerAttn = deduped
+  const shipToAttn = deduped
+
+  // ── Machine: "{serial}  Serial #:  {model}  {itemCode}  Item:" ───────────
+  const machineLineM = text.match(/(\d{5,8})\s+Serial #:\s+([^\t]+?)\s+([A-Z0-9-]{4,20})\s+Item:/)
+  const serialNumber = machineLineM?.[1] ?? ''
+  const machineModel = machineLineM?.[2]?.trim() ?? ''
+  const machineItemCode = machineLineM?.[3] ?? ''
+
+  // ── Fault ─────────────────────────────────────────────────────────────────
   const fault = extract(text, 'Fault') ?? ''
 
-  // ── Line items ────────────────────────────────────────────────────────────
-  // Pattern: "CT202635 | Toner Cartridge C | Qty: 1"
+  // ── Line items: Axus table format ─────────────────────────────────────────
+  // Format: "{num} {qty} ${price} ${total}  {CODE} {UNIT}  {Description} {qty}"
+  // e.g.: "1 1.00 $0.00 $0.00\tCWAA0986 UNIT\tWaste Toner Bottle 1.00"
   const lineItems: AxusJobData['lineItems'] = []
-  const lineItemRe = /([A-Z0-9-]{4,})\s*\|\s*([^|]+?)\s*\|\s*Qty[:\s]+(\d+)/gi
+  const lineItemRe = /\d+\s+[\d.]+\s+\$[\d.]+\s+\$[\d.]+\s+([A-Z0-9-]{4,})\s+\w+\s+([^\t\n]+?)\s+[\d.]+\s*$/gm
   let m: RegExpExecArray | null
   while ((m = lineItemRe.exec(text)) !== null) {
-    lineItems.push({
-      code: m[1].trim(),
-      description: m[2].trim(),
-      qty: parseInt(m[3], 10),
-    })
+    lineItems.push({ code: m[1].trim(), description: m[2].trim(), qty: 1 })
+  }
+  // Qty from "Num. Qty." table if present
+  if (lineItems.length === 0) {
+    // Fallback: look for item code + description pattern
+    const fallbackRe = /([A-Z0-9]{6,})\s+(?:UNIT|EA|BOX|CTN|EACH)\s+([^\n]{4,80})/g
+    while ((m = fallbackRe.exec(text)) !== null) {
+      lineItems.push({ code: m[1].trim(), description: m[2].trim(), qty: 1 })
+    }
   }
 
   return {
-    axusJobNumber: jobNumber.split(/\s/)[0], // take first token in case of trailing text
+    axusJobNumber: jobNumber,
     jobType,
     status,
     dateDue,
@@ -146,10 +180,10 @@ export async function parseAxusJobPdf(buffer: Buffer): Promise<AxusJobData> {
 
 function mapJobType(raw: string): string {
   const lower = raw.toLowerCase()
-  if (lower.includes('consumable')) return 'consumable'
-  if (lower.includes('install')) return 'installation'
-  if (lower.includes('deliver') || lower.includes('supply')) return 'delivery'
-  return lower.trim() || 'delivery'
+  if (lower.includes('consumable') || lower.includes('toner') || lower.includes('supply')) return 'toner_ship'
+  if (lower.includes('install')) return 'install'
+  if (lower.includes('collect') || lower.includes('pickup') || lower.includes('pick-up')) return 'collection'
+  return 'delivery'
 }
 
 /** Extract the text between two section headers */
