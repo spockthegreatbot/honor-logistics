@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { Calendar, User } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/badge'
@@ -72,15 +72,31 @@ function JobCard({
   job,
   index,
   onClick,
+  onStatusChange,
 }: {
   job: Job
   index: number
   onClick: () => void
+  onStatusChange: (jobId: string, newStatus: JobStatus) => void
 }) {
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const typeColor = JOB_TYPE_COLORS[job.job_type] ?? 'bg-[#2a2d3e] border-[#363a52] text-[#94a3b8]'
   const staffInitials = job.staff?.name ? getInitials(job.staff.name) : null
   const clientName = job.clients?.name
   const clientColor = getClientColor(clientName, job.clients?.color_code)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!dropdownOpen) return
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [dropdownOpen])
 
   return (
     <Draggable draggableId={job.id} index={index}>
@@ -92,7 +108,7 @@ function JobCard({
           onClick={onClick}
           className={`
             rounded-xl border bg-[#1e2130] cursor-pointer
-            transition-all duration-150 group overflow-hidden
+            transition-all duration-150 group
             ${snapshot.isDragging
               ? 'border-orange-500/50 shadow-lg shadow-orange-500/10 scale-[1.02]'
               : 'border-[#2a2d3e] hover:border-[#363a52]'
@@ -100,19 +116,103 @@ function JobCard({
           `}
           style={{
             borderLeft: clientName ? `3px solid ${clientColor}` : undefined,
+            position: 'relative',
           }}
         >
           <div className="p-3">
-            {/* Top row: job number + type badge */}
+            {/* Top row: job number + type badge + status button */}
             <div className="flex items-center justify-between mb-2">
               <span className="font-mono text-xs font-bold text-orange-400">
                 #{String(job.job_number ?? job.id).slice(-6).toUpperCase()}
               </span>
-              <span className={`text-xs px-1.5 py-0.5 rounded-md border font-medium ${typeColor} whitespace-nowrap`}>
-                {job.order_types && job.order_types.length > 0
-                  ? job.order_types.map(t => ({ delivery:'Delivery', installation:'Install', pickup:'Pick-Up', relocation:'Reloc' })[t] ?? t).join('+')
-                  : jobTypeLabel(job.job_type)}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className={`text-xs px-1.5 py-0.5 rounded-md border font-medium ${typeColor} whitespace-nowrap`}>
+                  {job.order_types && job.order_types.length > 0
+                    ? job.order_types.map(t => ({ delivery:'Delivery', installation:'Install', pickup:'Pick-Up', relocation:'Reloc' })[t] ?? t).join('+')
+                    : jobTypeLabel(job.job_type)}
+                </span>
+                {/* Status dropdown trigger */}
+                <div ref={dropdownRef} style={{ position: 'relative' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDropdownOpen((o) => !o)
+                    }}
+                    title="Change status"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '4px',
+                      border: '1px solid #363a52',
+                      background: dropdownOpen ? '#2a2d3e' : 'transparent',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      lineHeight: 1,
+                      padding: 0,
+                      flexShrink: 0,
+                    }}
+                  >
+                    ⋮
+                  </button>
+                  {dropdownOpen && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        position: 'absolute',
+                        top: '24px',
+                        right: 0,
+                        zIndex: 50,
+                        background: '#1a1d27',
+                        border: '1px solid #363a52',
+                        borderRadius: '8px',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                        minWidth: '148px',
+                        padding: '4px',
+                      }}
+                    >
+                      {COLUMNS.map((col) => {
+                        const isCurrent = job.status === col.id
+                        return (
+                          <button
+                            key={col.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDropdownOpen(false)
+                              if (!isCurrent) onStatusChange(job.id, col.id)
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              width: '100%',
+                              padding: '5px 8px',
+                              borderRadius: '5px',
+                              border: 'none',
+                              background: isCurrent ? '#2a2d3e' : 'transparent',
+                              color: isCurrent ? '#f1f5f9' : '#94a3b8',
+                              fontSize: '11px',
+                              fontWeight: isCurrent ? 600 : 400,
+                              cursor: isCurrent ? 'default' : 'pointer',
+                              textAlign: 'left',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {isCurrent && (
+                              <span style={{ color: '#f97316', fontSize: '10px' }}>✓</span>
+                            )}
+                            {!isCurrent && <span style={{ width: '10px', display: 'inline-block' }} />}
+                            {col.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Client badge */}
@@ -168,6 +268,26 @@ export function KanbanBoard({ initialJobs, onJobClick }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs)
   const [dragError, setDragError] = useState<string | null>(null)
   const [clientFilter, setClientFilter] = useState<string | null>(null)
+
+  async function handleStatusChange(jobId: string, newStatus: JobStatus) {
+    const prev = jobs.find((j) => j.id === jobId)?.status
+    setDragError(null)
+    setJobs((js) => js.map((j) => (j.id === jobId ? { ...j, status: newStatus } : j)))
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) {
+        setJobs((js) => js.map((j) => (j.id === jobId ? { ...j, status: prev ?? null } : j)))
+        setDragError('Failed to update job status. Change reverted.')
+      }
+    } catch {
+      setJobs((js) => js.map((j) => (j.id === jobId ? { ...j, status: prev ?? null } : j)))
+      setDragError('Network error — job status change reverted.')
+    }
+  }
 
   // Determine which billing clients actually appear in the job list
   const presentClients = BILLING_CLIENTS.filter((c) =>
@@ -326,6 +446,7 @@ export function KanbanBoard({ initialJobs, onJobClick }: Props) {
                           job={job}
                           index={index}
                           onClick={() => onJobClick(job.id)}
+                          onStatusChange={handleStatusChange}
                         />
                       ))}
                       {provided.placeholder}
