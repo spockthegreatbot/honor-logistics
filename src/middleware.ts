@@ -8,6 +8,7 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith('/api/telegram') ||
     pathname.startsWith('/api/email/poll') ||
+    pathname.startsWith('/api/migrate') ||
     pathname.startsWith('/auth/callback') ||
     pathname.includes('/print')
   ) {
