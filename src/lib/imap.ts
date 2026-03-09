@@ -29,6 +29,11 @@ export async function fetchUnreadEmails(): Promise<ParsedEmail[]> {
       pass: process.env.IMAP_PASS!,
     },
     logger: false,
+    tls: {
+      // When IMAP_HOST is an IP, supply the real hostname for TLS SNI/verification
+      servername: process.env.IMAP_TLS_SERVERNAME ?? undefined,
+      rejectUnauthorized: false,
+    },
   })
 
   const emails: ParsedEmail[] = []
@@ -103,6 +108,10 @@ export async function markAsRead(uids: number[]): Promise<void> {
       pass: process.env.IMAP_PASS!,
     },
     logger: false,
+    tls: {
+      servername: process.env.IMAP_TLS_SERVERNAME ?? undefined,
+      rejectUnauthorized: false,
+    },
   })
 
   await client.connect()
