@@ -92,7 +92,7 @@ export async function parseAxusJobPdf(buffer: Buffer): Promise<AxusJobData> {
   const dateOut = parseDate(dateOutLine?.[1] ?? null)
 
   // ── Customer code: alphanumeric code-like token appearing after Fax: lines ─
-  const codeM = text.match(/Tel: Fax:.*?\n([A-Z0-9]{4,20})\s/s)
+  const codeM = text.match(/Tel: Fax:[\s\S]*?\n([A-Z0-9]{4,20})\s/)
   const customerCode = codeM?.[1] ?? ''
   const shipToCode = customerCode // same in most cases
 
