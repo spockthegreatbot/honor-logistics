@@ -50,6 +50,17 @@ function orderTypeLabel(job: Job): string {
   return jobTypeLabel(job.job_type)
 }
 
+type StatusGroup = 'all' | 'new' | 'in_progress' | 'completed'
+
+const STATUS_GROUPS: Record<StatusGroup, string[]> = {
+  all:         [],
+  new:         ['new', 'runup_pending', 'runup_complete'],
+  in_progress: ['ready', 'dispatched', 'in_transit'],
+  completed:   ['complete', 'invoiced', 'cancelled'],
+}
+
+const PAGE_SIZE = 20
+
 interface Props {
   initialJobs: Job[]
   count: number
@@ -66,11 +77,15 @@ export function JobsClient({ initialJobs, count }: Props) {
   const [showNewJob, setShowNewJob] = useState(searchParams.get('new') === '1')
 
   // Filter state
+  const [statusGroup, setStatusGroup] = useState<StatusGroup>('all')
   const [filterType, setFilterType] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterClientRef, setFilterClientRef] = useState('')
   const [showAll, setShowAll] = useState(false)
   const [loadingAll, setLoadingAll] = useState(false)
+
+  // Pagination
+  const [page, setPage] = useState(0)
 
   async function toggleShowAll() {
     const next = !showAll
@@ -88,12 +103,27 @@ export function JobsClient({ initialJobs, count }: Props) {
     }
   }
 
+  // Reset page when filters change
+  function handleStatusGroup(g: StatusGroup) {
+    setStatusGroup(g)
+    setPage(0)
+  }
+  function handleFilterType(v: string) { setFilterType(v); setPage(0) }
+  function handleFilterStatus(v: string) { setFilterStatus(v); setPage(0) }
+  function handleFilterClientRef(v: string) { setFilterClientRef(v); setPage(0) }
+
   const filtered = jobs.filter((j) => {
+    // Status group pill filter
+    const group = STATUS_GROUPS[statusGroup]
+    if (group.length > 0 && !group.includes(j.status ?? '')) return false
     if (filterType && j.job_type !== filterType) return false
     if (filterStatus && j.status !== filterStatus) return false
     if (filterClientRef && !(j.client_reference ?? '').toLowerCase().includes(filterClientRef.toLowerCase())) return false
     return true
   })
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   function handleJobUpdated(updated: Job) {
     setJobs((prev) => prev.map((j) => (j.id === updated.id ? { ...j, ...updated } : j)))
@@ -153,26 +183,47 @@ export function JobsClient({ initialJobs, count }: Props) {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Status Group Pills */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {(['all', 'new', 'in_progress', 'completed'] as StatusGroup[]).map((g) => {
+          const labels: Record<StatusGroup, string> = { all: 'All', new: 'New', in_progress: 'In Progress', completed: 'Completed' }
+          const active = statusGroup === g
+          return (
+            <button
+              key={g}
+              onClick={() => handleStatusGroup(g)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                active
+                  ? 'bg-orange-500 border-orange-500 text-white'
+                  : 'border-[#2a2d3e] text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e]'
+              }`}
+            >
+              {labels[g]}
+            </button>
+          )
+        })}
         <button
           onClick={toggleShowAll}
           disabled={loadingAll}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
             showAll
               ? 'border-orange-500/50 bg-orange-500/10 text-orange-400'
               : 'border-[#2a2d3e] text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e]'
           }`}
         >
-          {loadingAll ? 'Loading...' : showAll ? 'Showing all jobs' : 'Show all jobs'}
+          {loadingAll ? 'Loading...' : showAll ? '✓ Show All' : 'Show All'}
         </button>
+      </div>
+
+      {/* Sub-filters */}
+      <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-1.5 text-xs text-[#94a3b8]">
           <Filter className="w-3.5 h-3.5" />
           Filter:
         </div>
         <select
           value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
+          onChange={(e) => handleFilterType(e.target.value)}
           className="h-8 rounded-lg border border-[#2a2d3e] bg-[#1a1d27] text-xs text-[#f1f5f9] px-2.5 focus:outline-none focus:ring-1 focus:ring-orange-500"
         >
           <option value="">All types</option>
@@ -182,7 +233,7 @@ export function JobsClient({ initialJobs, count }: Props) {
         </select>
         <select
           value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
+          onChange={(e) => handleFilterStatus(e.target.value)}
           className="h-8 rounded-lg border border-[#2a2d3e] bg-[#1a1d27] text-xs text-[#f1f5f9] px-2.5 focus:outline-none focus:ring-1 focus:ring-orange-500"
         >
           <option value="">All statuses</option>
@@ -193,21 +244,19 @@ export function JobsClient({ initialJobs, count }: Props) {
         <input
           type="text"
           value={filterClientRef}
-          onChange={(e) => setFilterClientRef(e.target.value)}
+          onChange={(e) => handleFilterClientRef(e.target.value)}
           placeholder="Client ref..."
           className="h-8 w-32 rounded-lg border border-[#2a2d3e] bg-[#1a1d27] text-xs text-[#f1f5f9] px-2.5 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-[#94a3b8]/60"
         />
         {(filterType || filterStatus || filterClientRef) && (
           <button
-            onClick={() => { setFilterType(''); setFilterStatus(''); setFilterClientRef('') }}
+            onClick={() => { handleFilterType(''); handleFilterStatus(''); handleFilterClientRef('') }}
             className="text-xs text-orange-400 hover:text-orange-300 transition"
           >
             Clear filters
           </button>
         )}
-        {(filterType || filterStatus || filterClientRef) && (
-          <span className="text-xs text-[#94a3b8]">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
-        )}
+        <span className="text-xs text-[#94a3b8]">{filtered.length} job{filtered.length !== 1 ? 's' : ''}</span>
       </div>
 
       {/* Views */}
@@ -217,74 +266,120 @@ export function JobsClient({ initialJobs, count }: Props) {
           onJobClick={(id) => setSelectedJobId(id)}
         />
       ) : (
-        <Card>
-          {filtered.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Job #</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Scheduled</TableHead>
-                  <TableHead>Assigned</TableHead>
-                  <TableHead>Created</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((job) => (
-                  <TableRow
-                    key={job.id}
-                    className="cursor-pointer"
-                    onClick={() => setSelectedJobId(job.id)}
-                  >
-                    <TableCell>
-                      <span className="font-mono font-semibold text-orange-400">
-                        #{String(job.job_number ?? job.id).slice(-6).toUpperCase()}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs font-semibold text-orange-300 bg-orange-500/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                        {orderTypeLabel(job)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="font-medium text-[#f1f5f9]">
-                      {job.clients?.name
-                        ? <span style={{ color: job.clients.color_code ?? undefined }} className="font-semibold">{job.clients.name}</span>
-                        : '—'}
-                    </TableCell>
-                    <TableCell className="text-[#94a3b8]">
-                      {job.end_customers?.name ?? '—'}
-                    </TableCell>
-                    <TableCell><StatusBadge status={job.status ?? ''} /></TableCell>
-                    <TableCell className="text-[#94a3b8]">{formatDate(job.scheduled_date)}</TableCell>
-                    <TableCell className="text-[#94a3b8]">{job.staff?.name ?? '—'}</TableCell>
-                    <TableCell className="text-[#94a3b8]">{formatDate(job.created_at)}</TableCell>
+        <>
+          <Card>
+            {paginated.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Job #</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Scheduled</TableHead>
+                    <TableHead>Assigned</TableHead>
+                    <TableHead>Created</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="py-16 flex flex-col items-center text-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-[#2a2d3e] flex items-center justify-center">
-                <List className="w-6 h-6 text-[#94a3b8]" />
+                </TableHeader>
+                <TableBody>
+                  {paginated.map((job) => (
+                    <TableRow
+                      key={job.id}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedJobId(job.id)}
+                    >
+                      <TableCell>
+                        <span className="font-mono font-semibold text-orange-400">
+                          #{String(job.job_number ?? job.id).slice(-6).toUpperCase()}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs font-semibold text-orange-300 bg-orange-500/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                          {orderTypeLabel(job)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="font-medium text-[#f1f5f9]">
+                        {job.clients?.name
+                          ? <span style={{ color: job.clients.color_code ?? undefined }} className="font-semibold">{job.clients.name}</span>
+                          : '—'}
+                      </TableCell>
+                      <TableCell className="text-[#94a3b8]">
+                        {job.end_customers?.name ?? '—'}
+                      </TableCell>
+                      <TableCell><StatusBadge status={job.status ?? ''} /></TableCell>
+                      <TableCell className="text-[#94a3b8]">{formatDate(job.scheduled_date)}</TableCell>
+                      <TableCell className="text-[#94a3b8]">{job.staff?.name ?? '—'}</TableCell>
+                      <TableCell className="text-[#94a3b8]">{formatDate(job.created_at)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="py-16 flex flex-col items-center text-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-[#2a2d3e] flex items-center justify-center">
+                  <List className="w-6 h-6 text-[#94a3b8]" />
+                </div>
+                <div>
+                  <p className="font-semibold text-[#f1f5f9]">No jobs found</p>
+                  <p className="text-sm text-[#94a3b8] mt-0.5">
+                    {filterType || filterStatus || statusGroup !== 'all' ? 'Try adjusting your filters' : 'Get started by creating your first job'}
+                  </p>
+                </div>
+                {!filterType && !filterStatus && statusGroup === 'all' && (
+                  <Button size="sm" onClick={() => setShowNewJob(true)} className="mt-1">
+                    <Plus className="w-4 h-4" />
+                    New Job
+                  </Button>
+                )}
               </div>
-              <div>
-                <p className="font-semibold text-[#f1f5f9]">No jobs found</p>
-                <p className="text-sm text-[#94a3b8] mt-0.5">
-                  {filterType || filterStatus ? 'Try adjusting your filters' : 'Get started by creating your first job'}
-                </p>
+            )}
+          </Card>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs text-[#94a3b8]">
+                Page {page + 1} of {totalPages} · {filtered.length} jobs
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="px-3 py-1.5 rounded-lg border border-[#2a2d3e] text-xs font-medium text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  ← Prev
+                </button>
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  // Show pages around current
+                  const mid = Math.min(Math.max(page, 3), totalPages - 4)
+                  const p = totalPages <= 7 ? i : i + Math.max(0, mid - 3)
+                  if (p >= totalPages) return null
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${
+                        p === page
+                          ? 'bg-orange-500 text-white'
+                          : 'border border-[#2a2d3e] text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e]'
+                      }`}
+                    >
+                      {p + 1}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="px-3 py-1.5 rounded-lg border border-[#2a2d3e] text-xs font-medium text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next →
+                </button>
               </div>
-              {!filterType && !filterStatus && (
-                <Button size="sm" onClick={() => setShowNewJob(true)} className="mt-1">
-                  <Plus className="w-4 h-4" />
-                  New Job
-                </Button>
-              )}
             </div>
           )}
-        </Card>
+        </>
       )}
 
       {/* Job Detail Slide-Over */}
