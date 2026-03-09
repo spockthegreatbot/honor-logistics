@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { fetchUnreadEmails, markAsRead } from '@/lib/imap'
 import { parseBookingForm } from '@/lib/docx-parser'
+import { parseAxusJobPdf } from '@/lib/axus-pdf-parser'
 
 const BOT_TOKEN = process.env.HONOR_BOT_TOKEN!
 const GROUP_CHAT_ID = process.env.HONOR_GROUP_CHAT_ID!
@@ -278,6 +279,200 @@ export async function POST(req: NextRequest) {
         const clientDomain = c.billing_email?.split('@')[1]?.toLowerCase()
         return clientDomain && clientDomain === senderDomain
       })
+
+      // ── 0. Axus email handling ────────────────────────────────────
+      const isAxusEmail = email.from.toLowerCase() === 'support@axusgroup.com.au'
+      const isThreadReply = /^(re:|fw:|fwd:)/i.test(email.subject.trim())
+
+      // 0a. New Axus job booking (has "Job NoComment" PDF attachment)
+      const axusJobPdf = email.attachments.find((a: EmailAttachment) =>
+        a.filename.toLowerCase().startsWith('job nocomment') &&
+        a.filename.toLowerCase().endsWith('.pdf')
+      )
+
+      if (isAxusEmail && axusJobPdf && !isThreadReply) {
+        let axusData
+        try {
+          axusData = await parseAxusJobPdf((axusJobPdf as EmailAttachment).content)
+        } catch (e) {
+          console.error('Axus PDF parse error:', e)
+          results.push(`Axus PDF parse failed: ${(e as Error).message}`)
+          uidsToMark.push(email.uid)
+          processedCount++
+          continue
+        }
+
+        const clientRef = `AXUS-${axusData.axusJobNumber}`
+        const { data: existing } = await supabase.from('jobs')
+          .select('id, job_number').eq('client_reference', clientRef).maybeSingle()
+
+        if (existing) {
+          results.push(`Skipped duplicate ${clientRef} (exists as ${existing.job_number})`)
+          uidsToMark.push(email.uid)
+          processedCount++
+          continue
+        }
+
+        // Get Axus client ID
+        const { data: axusClient } = await supabase.from('clients')
+          .select('id').ilike('name', '%axus%').limit(1).single()
+        const axusClientId = axusClient?.id ?? null
+
+        // Look up or create end_customer
+        let endCustomerId: string | null = null
+        if (axusClientId && axusData.shipToCode) {
+          const firstName = axusData.shipToName.split(' ')[0]
+          const { data: ec } = await supabase.from('end_customers')
+            .select('id').eq('client_id', axusClientId)
+            .ilike('name', `%${firstName}%`).limit(1).single()
+          if (ec?.id) {
+            endCustomerId = ec.id
+          } else {
+            const { data: newEc } = await supabase.from('end_customers').insert({
+              name: axusData.shipToName,
+              client_id: axusClientId,
+              contact_name: axusData.shipToAttn || null,
+              contact_phone: axusData.shipToPhone || null,
+              address: axusData.shipToAddress || null,
+            }).select('id').single()
+            endCustomerId = newEc?.id ?? null
+          }
+        }
+
+        // Generate job number
+        const year = new Date().getFullYear()
+        const { data: maxJob } = await supabase.from('jobs').select('job_number')
+          .ilike('job_number', `HRL-${year}-%`).order('job_number', { ascending: false }).limit(1).single()
+        let seq = 1
+        if (maxJob?.job_number) {
+          const lastSeq = parseInt(maxJob.job_number.split('-')[2], 10)
+          if (!isNaN(lastSeq)) seq = lastSeq + 1
+        }
+        const jobNumber = `HRL-${year}-${String(seq).padStart(4, '0')}`
+
+        // Upload job PDF
+        const bucket = 'job-documents'
+        const jobPdfUrl = await uploadAttachment(
+          supabase, bucket, 'axus-jobs',
+          (axusJobPdf as EmailAttachment).filename,
+          (axusJobPdf as EmailAttachment).content,
+          'application/pdf'
+        )
+
+        // Upload EDI label PDF if present
+        const ediLabelPdf = email.attachments.find((a: EmailAttachment) =>
+          a.filename.toLowerCase().startsWith('edi labels') && a.contentType === 'application/pdf'
+        )
+        const labelUrl = ediLabelPdf
+          ? await uploadAttachment(supabase, bucket, 'axus-labels',
+              (ediLabelPdf as EmailAttachment).filename,
+              (ediLabelPdf as EmailAttachment).content,
+              'application/pdf')
+          : null
+
+        // Build notes
+        const lineItemsSummary = axusData.lineItems.map(li => `${li.description} (${li.code}) x${li.qty}`).join(', ')
+        const fullNotes = [
+          axusData.fault || null,
+          lineItemsSummary ? `Items: ${lineItemsSummary}` : null,
+          labelUrl ? `EDI Label: ${labelUrl}` : null,
+        ].filter(Boolean).join('\n')
+
+        const { data: newJob, error: jobErr } = await supabase.from('jobs').insert({
+          job_number: jobNumber,
+          job_type: axusData.jobType,
+          order_types: [axusData.jobType],
+          status: 'new',
+          client_id: axusClientId,
+          end_customer_id: endCustomerId,
+          contact_name: axusData.shipToAttn || null,
+          contact_phone: axusData.shipToPhone || null,
+          scheduled_date: axusData.dateDue,
+          address_to: axusData.shipToAddress || null,
+          machine_model: axusData.machineModel || null,
+          serial_number: axusData.serialNumber || null,
+          notes: fullNotes || null,
+          client_reference: clientRef,
+          has_aod: false,
+          booking_form_url: jobPdfUrl,
+        }).select('id').single()
+
+        if (jobErr) {
+          console.error('Axus job create error:', jobErr)
+          results.push(`${clientRef}: job create failed — ${jobErr.message}`)
+        } else {
+          const lineItemsMsg = axusData.lineItems.map(li => `${li.description} x${li.qty}`).join(', ')
+          await sendTelegram(
+            `🆕 <b>New AXUS Job — ${jobNumber}</b>\n` +
+            `📋 Type: ${axusData.jobType.charAt(0).toUpperCase() + axusData.jobType.slice(1)}\n` +
+            `👤 Customer: ${axusData.shipToName}\n` +
+            `📍 Deliver To: ${axusData.shipToAddress}\n` +
+            `🔧 Machine: ${axusData.machineModel} | S/N: ${axusData.serialNumber}\n` +
+            `📦 Items: ${lineItemsMsg || 'See job card'}\n` +
+            (axusData.dateDue ? `📅 Due: ${axusData.dateDue}\n` : '') +
+            `🔗 https://crm.honorremovals.com.au/jobs`
+          )
+          results.push(`Created AXUS job ${jobNumber} (Axus Job# ${axusData.axusJobNumber})`)
+          console.log(`Created AXUS job ${jobNumber} id=${newJob?.id}`)
+        }
+
+        // Log email
+        await supabase.from('email_log').insert({
+          direction: 'inbound', from_email: email.from, from_name: email.fromName,
+          from_address: email.from, subject: email.subject, body_text: email.body,
+          body_preview: email.body.slice(0, 500), received_at: email.receivedAt.toISOString(),
+          client_id: axusClientId, ms_message_id: email.messageId, raw_message_id: email.messageId,
+          status: 'received', processed: !jobErr,
+        })
+
+        uidsToMark.push(email.uid)
+        processedCount++
+        continue
+      }
+
+      // 0b. Axus thread replies (RE:/FW:)
+      if (isAxusEmail && isThreadReply) {
+        const jobNumMatch = email.subject.match(/\[Axus_Group Job#(\d+)/)
+        const axusJobNum = jobNumMatch?.[1]
+
+        let existingJobNumber = 'unknown'
+        if (axusJobNum) {
+          const { data: existingJob } = await supabase.from('jobs')
+            .select('id, job_number').eq('client_reference', `AXUS-${axusJobNum}`).maybeSingle()
+          if (existingJob) {
+            existingJobNumber = existingJob.job_number
+            // Attach any new PDFs to notes
+            const newPdfs = email.attachments.filter((a: EmailAttachment) => a.contentType === 'application/pdf')
+            if (newPdfs.length > 0) {
+              const uploadedUrls = await Promise.all(newPdfs.map((pdf: EmailAttachment) =>
+                uploadAttachment(supabase, 'job-documents', 'axus-updates', pdf.filename, pdf.content, 'application/pdf')
+              ))
+              const urlList = uploadedUrls.filter(Boolean).join('\n')
+              if (urlList) {
+                const { data: existingJobData } = await supabase.from('jobs')
+                  .select('notes').eq('id', existingJob.id).single()
+                const updatedNotes = [existingJobData?.notes, `Update ${new Date().toISOString().slice(0, 10)}: ${urlList}`]
+                  .filter(Boolean).join('\n')
+                await supabase.from('jobs').update({ notes: updatedNotes }).eq('id', existingJob.id)
+              }
+            }
+            await sendTelegram(`📎 <b>AXUS Job Update — ${existingJobNumber}</b>\nRe: ${email.subject}\n🔗 https://crm.honorremovals.com.au/jobs`)
+          }
+        }
+
+        await supabase.from('email_log').insert({
+          direction: 'inbound', from_email: email.from, from_name: email.fromName,
+          from_address: email.from, subject: email.subject, body_text: email.body,
+          body_preview: email.body.slice(0, 500), received_at: email.receivedAt.toISOString(),
+          client_id: null, ms_message_id: email.messageId, raw_message_id: email.messageId,
+          status: 'received', processed: true,
+        })
+
+        results.push(`Axus reply logged (job ${existingJobNumber})`)
+        uidsToMark.push(email.uid)
+        processedCount++
+        continue
+      }
 
       // ── 1. Check for EFEX booking form DOCX ──────────────────────
       const bookingDocx = email.attachments.find((a: EmailAttachment) =>
