@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   DndContext,
   DragEndEvent,
@@ -368,6 +368,29 @@ export function KanbanBoard({ initialJobs, onJobClick }: Props) {
   )
 
   const activeJob = jobs.find(j => j.id === activeJobId) ?? null
+
+  // Auto-archive jobs with past scheduled_date on mount
+  useEffect(() => {
+    fetch('/api/jobs/archive-past', { method: 'POST' })
+      .then(r => r.json())
+      .then((data: { archived?: number }) => {
+        if (data.archived && data.archived > 0) {
+          // Mark matching jobs as archived in local state
+          const today = new Date().toISOString().slice(0, 10)
+          setJobs(prev => prev.map(j => {
+            if (
+              j.archived ||
+              !j.scheduled_date ||
+              j.scheduled_date >= today
+            ) return j
+            const status = (j.status ?? '').toLowerCase()
+            if (['done', 'complete', 'completed', 'invoiced', 'cancelled'].includes(status)) return j
+            return { ...j, archived: true }
+          }))
+        }
+      })
+      .catch(() => {/* silent — non-critical */})
+  }, [])
 
   // Determine which billing clients appear in job list
   const presentClients = BILLING_CLIENTS.filter(c =>
