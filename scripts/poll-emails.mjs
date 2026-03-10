@@ -357,63 +357,89 @@ function axusBlockField(block, label) {
 
 function axusMapJobType(raw) {
   const lower = raw.toLowerCase()
-  if (lower.includes('consumable') || lower.includes('toner') || lower.includes('supply')) return 'toner'
+  if (lower.includes('consumable') || lower.includes('toner') || lower.includes('supply') || lower.includes('service')) return 'delivery'
   if (lower.includes('install')) return 'install'
-  if (lower.includes('collect') || lower.includes('pickup') || lower.includes('pick-up')) return 'collection'
+  if (lower.includes('collect') || lower.includes('pickup') || lower.includes('pick-up')) return 'pickup'
   return 'delivery'
 }
 
-async function parseAxusJobPdf(buffer) {
+async function parseAxusJobPdf(buffer, subject = '') {
   const parser = new PDFParse({ data: buffer })
   const result = await parser.getText()
   const text = result.text
 
-  const jobNumber = axusExtract(text, 'Job#') ?? axusExtract(text, 'Job No') ?? ''
-  const rawType = axusExtract(text, 'Type') ?? ''
+  // Axus PDFs are two-column — pdf-parse interleaves both columns into one text stream.
+  // Column data appears duplicated (company name, phone, address appear twice).
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+
+  // ── Job number: try subject first (most reliable), then first 5-6 digit number in text ──
+  const subjectJobM = subject.match(/\[Axus_Group\s+Job#?(\d+)/i)
+  const pdfJobM = text.match(/\b(\d{5,6})\b/)
+  const jobNumber = subjectJobM?.[1] ?? pdfJobM?.[1] ?? ''
+
+  // ── Job type ──────────────────────────────────────────────────────────────
+  const rawType = text.match(/^(Consumable|Installation|Delivery|Service|Collection)$/mi)?.[1] ?? ''
   const jobType = axusMapJobType(rawType)
-  const status = axusExtract(text, 'Status') ?? 'Booked'
-  const dateDue = axusParseDate(axusExtract(text, 'Date Due'))
-  const dateOut = axusParseDate(axusExtract(text, 'Date Out'))
-  const priority = axusExtract(text, 'Priority') ?? 'Normal'
 
-  const customerLine = axusExtract(text, 'Customer') ?? ''
-  const customerName = customerLine.replace(/\(Code:[^)]+\)/i, '').trim()
-  const customerCodeM = customerLine.match(/Code:\s*([^\s)]+)/i)
-  const customerCode = customerCodeM?.[1] ?? ''
+  // ── Status ────────────────────────────────────────────────────────────────
+  const status = text.match(/^(Booked|In Progress|Complete|Cancelled)$/mi)?.[1] ?? 'Booked'
 
-  const customerBlock = axusExtractBlock(text, 'Customer', 'Ship To')
-  const customerAddress = axusBlockField(customerBlock, 'Address') ?? ''
-  const customerPhone = axusBlockField(customerBlock, 'Tel') ?? axusBlockField(customerBlock, 'Phone') ?? ''
-  const customerAttn = axusBlockField(customerBlock, 'Attn') ?? ''
+  // ── Priority ─────────────────────────────────────────────────────────────
+  const priority = text.match(/\b(Normal|High|Urgent|Low)\b/i)?.[1] ?? 'Normal'
 
-  const shipToLine = axusExtract(text, 'Ship To') ?? ''
-  const shipToName = shipToLine.replace(/\(Code:[^)]+\)/i, '').trim()
-  const shipToCodeM = shipToLine.match(/Code:\s*([^\s)]+)/i)
-  const shipToCode = shipToCodeM?.[1] ?? ''
+  // ── Dates ─────────────────────────────────────────────────────────────────
+  const dateDue = axusParseDate(text.match(/Date Due:[\s\S]*?(\d{1,2}\/\d{1,2}\/\d{2,4})/)?.[1] ?? null)
+  const dateOut = axusParseDate(text.match(/Date Out:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i)?.[1] ?? null)
 
-  const shipToBlock = axusExtractBlock(text, 'Ship To', 'Machine')
-  const shipToAddress = axusBlockField(shipToBlock, 'Address') ?? ''
-  const shipToPhone = axusBlockField(shipToBlock, 'Tel') ?? axusBlockField(shipToBlock, 'Phone') ?? ''
-  const shipToAttn = axusBlockField(shipToBlock, 'Attn') ?? ''
+  // ── Phone: appears duplicated "0296425444\t0296425444" — take first part ──
+  const phoneRaw = text.match(/0[2-9][\d ]{7,10}/)?.[0]?.split(/[\s\t]+/)?.[0]?.trim() ?? ''
+  const customerPhone = phoneRaw
+  const shipToPhone = phoneRaw
 
-  const machineLine = axusExtract(text, 'Machine') ?? ''
-  const machineParts = machineLine.split(/\s*\|\s*/)
-  const machineModel = machineParts[0]?.trim() ?? ''
-  const itemPart = machineParts.find(p => /Item:/i.test(p))
-  const machineItemCode = itemPart?.replace(/Item:/i, '').trim() ?? ''
-  const serialPart = machineParts.find(p => /Serial#?:/i.test(p))
-  const serialNumber = serialPart?.replace(/Serial#?:/i, '').trim() ?? axusExtract(text, 'Serial#') ?? ''
-  const fault = axusExtract(text, 'Fault') ?? ''
+  // ── Company name: line immediately after the phone number line ────────────
+  const phoneLineIdx = lines.findIndex(l => /^0[2-9][\d\s]{7,}/.test(l))
+  const companyName = phoneLineIdx >= 0 ? lines[phoneLineIdx + 1] ?? '' : ''
+  const customerName = companyName
+  const shipToName = companyName
 
+  // ── Customer/Ship code ────────────────────────────────────────────────────
+  const customerCode = text.match(/Code:[\s\t]*Code:[\s\S]*?\n([A-Z0-9]{4,20})/)?.[1] ?? ''
+  const shipToCode = customerCode
+
+  // ── Address: street line + "SUBURB, STATE POSTCODE" line ─────────────────
+  const addrM = text.match(/([^\n]{5,80})\n([A-Z][A-Z\s,]+(?:NSW|VIC|QLD|SA|WA|TAS|ACT|NT)\s*\d{4})/)
+  const customerAddress = addrM ? `${addrM[1].trim()}, ${addrM[2].trim()}` : ''
+  const shipToAddress = customerAddress
+
+  // ── Attn: appears after "Attn: Attn:" header, duplicated across columns ───
+  const attnRaw = text.match(/Attn:\s*Attn:\s*[\r\n]+([^\r\n]+)/)?.[1]?.trim() ?? ''
+  const attnWords = attnRaw.split(/\s+/)
+  const half = Math.floor(attnWords.length / 2)
+  const attn = (half > 0 && attnWords.slice(0, half).join(' ') === attnWords.slice(half).join(' '))
+    ? attnWords.slice(0, half).join(' ') : attnRaw
+  const customerAttn = attn
+  const shipToAttn = attn
+
+  // ── Machine: "{serial}\tSerial #:\t{model}\t{itemCode}\tItem:" ────────────
+  const machineLineM = text.match(/(\d{5,9})\s+Serial #:\s+([^\t]+?)\s+([A-Z0-9][A-Z0-9-]{3,})\s+Item:/)
+  const serialNumber = machineLineM?.[1] ?? ''
+  const machineModel = machineLineM?.[2]?.trim() ?? ''
+  const machineItemCode = machineLineM?.[3] ?? ''
+
+  // ── Fault ─────────────────────────────────────────────────────────────────
+  const fault = text.match(/Fault:\s*([^\n]+)/)?.[1]?.trim() ?? ''
+
+  // ── Line items: "$price $total\tCODE UNIT\tDescription qty" ───────────────
   const lineItems = []
-  const lineItemRe = /([A-Z0-9-]{4,})\s*\|\s*([^|]+?)\s*\|\s*Qty[:\s]+(\d+)/gi
+  const lineItemRe = /\$[\d.]+\s+\$[\d.]+\s+([A-Z0-9]{4,})\s+\w+\s+([^\n\d]+?)\s+([\d.]+)\s*$/gm
   let m
   while ((m = lineItemRe.exec(text)) !== null) {
-    lineItems.push({ code: m[1].trim(), description: m[2].trim(), qty: parseInt(m[3], 10) })
+    lineItems.push({ code: m[1].trim(), description: m[2].trim(), qty: parseFloat(m[3]) })
   }
 
   return {
-    axusJobNumber: jobNumber.split(/\s/)[0],
+    axusJobNumber: jobNumber,
     jobType, status, dateDue, dateOut, priority,
     customerName, customerCode, customerAddress, customerPhone, customerAttn,
     shipToName, shipToCode, shipToAddress, shipToPhone, shipToAttn,
@@ -748,7 +774,7 @@ async function run() {
       if (axusPdf) {
         console.log(`  📄 Axus job PDF: ${axusPdf.filename}`)
         try {
-          const axusData = await parseAxusJobPdf(axusPdf.content)
+          const axusData = await parseAxusJobPdf(axusPdf.content, subject)
           console.log(`  Axus Job#: ${axusData.axusJobNumber} | Type: ${axusData.jobType} | Ship To: ${axusData.shipToName}`)
 
           const ediPdf = attachments.find(a =>
