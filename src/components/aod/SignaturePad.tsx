@@ -49,8 +49,9 @@ export function SignaturePad({ isOpen, onClose, onConfirm, jobNumber }: Signatur
 
   const handleConfirm = () => {
     if (!sigRef.current) return
-    // Skip isEmpty() — unreliable when canvas is CSS-sized; just get the data URL
-    const dataUrl = sigRef.current.getTrimmedCanvas().toDataURL('image/png')
+    // getTrimmedCanvas() crashes in this version — use getCanvas() directly
+    const canvas = sigRef.current.getCanvas()
+    const dataUrl = canvas.toDataURL('image/png')
     onConfirm(dataUrl)
   }
 
