@@ -106,8 +106,8 @@ export async function POST(
     const { error: updateError } = await supabaseAdmin
       .from('jobs')
       .update({
-        aod_pdf_url: aodUrl,
-        aod_signed_at: new Date().toISOString(),
+        signed_aod_url: aodUrl,
+        signed_aod_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)

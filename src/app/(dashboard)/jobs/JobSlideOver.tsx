@@ -60,6 +60,8 @@ interface Job {
   updated_at: string | null
   aod_pdf_url?: string | null
   aod_signed_at?: string | null
+  signed_aod_url?: string | null
+  signed_aod_at?: string | null
   // EFEX order fields
   order_types?: string[] | null
   contact_name?: string | null
@@ -738,15 +740,14 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                 />
               </div>
 
-              {/* Common: AOD / Digital Signature */}
-              <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130]">
-                <p className="text-sm font-semibold text-[#f1f5f9] mb-3">✍️ AOD / Digital Signature</p>
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" checked={hasAod} onChange={e => setHasAod(e.target.checked)} className="w-4 h-4 accent-orange-500" />
-                    <span className="text-sm text-[#f1f5f9]">AOD PDF exists for this job</span>
-                  </label>
-                  {!job?.aod_pdf_url && (
+              {/* Common: AOD Section */}
+              <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130] space-y-5">
+                <p className="text-sm font-semibold text-[#f1f5f9]">AOD Documents</p>
+
+                {/* Sub-section A: Customer Signature */}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Customer Signature</p>
+                  {!job?.signed_aod_url ? (
                     <div className="space-y-2">
                       <Button
                         className="w-full flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white"
@@ -757,16 +758,39 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                         {aodGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenLine className="w-4 h-4" />}
                         {aodGenerating ? 'Generating…' : 'Get Customer Signature'}
                       </Button>
-                      {aodMessage && (
-                        <p className="text-xs text-red-400">{aodMessage}</p>
-                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                        <div>
+                          <p className="text-sm text-green-400 font-medium">Signed ✅</p>
+                          {job.signed_aod_at && (
+                            <p className="text-xs text-[#94a3b8]">{new Date(job.signed_aod_at).toLocaleString('en-AU')}</p>
+                          )}
+                        </div>
+                      </div>
+                      <a href={job.signed_aod_url} target="_blank" rel="noopener noreferrer">
+                        <Button variant="outline" size="sm" className="w-full flex items-center gap-2">
+                          <Download className="w-4 h-4" />Download Signed AOD
+                        </Button>
+                      </a>
                     </div>
                   )}
+                </div>
+
+                {/* Sub-section B: EFEX AOD */}
+                <div className="space-y-2 pt-3 border-t border-[#2a2d3e]">
+                  <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">EFEX AOD</p>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={hasAod} onChange={e => setHasAod(e.target.checked)} className="w-4 h-4 accent-orange-500" />
+                    <span className="text-sm text-[#f1f5f9]">EFEX has sent AOD</span>
+                  </label>
                   {job?.aod_pdf_url ? (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
                         <FileText className="w-4 h-4 text-green-400 shrink-0" />
-                        <p className="text-sm text-green-400 font-medium">AOD PDF attached</p>
+                        <p className="text-sm text-green-400 font-medium">EFEX AOD received ✅</p>
                       </div>
                       <div className="flex gap-2">
                         <a href={job.aod_pdf_url} target="_blank" rel="noopener noreferrer" className="flex-1">
@@ -776,41 +800,47 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                         </a>
                         <a href={job.aod_pdf_url} target="_blank" rel="noopener noreferrer" onClick={() => setTimeout(() => window.print(), 500)} className="flex-1">
                           <Button size="sm" className="w-full flex items-center gap-2">
-                            <Printer className="w-4 h-4" />Print AOD
+                            <Printer className="w-4 h-4" />Print
                           </Button>
                         </a>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full flex items-center gap-2"
-                        disabled={aodSending}
-                        onClick={async () => {
-                          setAodSending(true)
-                          setAodMessage(null)
-                          try {
-                            const res = await fetch(`/api/jobs/${job.id}/aod/send`, { method: 'POST' })
-                            if (res.ok) {
-                              setAodMessage('✅ AOD sent to info@honorremovals.com.au')
-                            } else {
-                              const d = await res.json() as { error?: string }
-                              setAodMessage(`❌ ${d.error ?? 'Send failed'}`)
-                            }
-                          } catch {
-                            setAodMessage('❌ Network error sending AOD')
-                          } finally {
-                            setAodSending(false)
-                          }
-                        }}
-                      >
-                        {aodSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        {aodSending ? 'Sending…' : 'Send to Onur'}
-                      </Button>
-                      {aodMessage && (
-                        <p className="text-xs text-[#94a3b8]">{aodMessage}</p>
-                      )}
                     </div>
-                  ) : null}
+                  ) : (
+                    <p className="text-xs text-[#94a3b8] italic">Will auto-attach when EFEX emails it</p>
+                  )}
+                </div>
+
+                {/* Send to Onur */}
+                <div className="pt-3 border-t border-[#2a2d3e] space-y-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full flex items-center gap-2"
+                    disabled={aodSending || (!job?.signed_aod_url && !job?.aod_pdf_url)}
+                    onClick={async () => {
+                      setAodSending(true)
+                      setAodMessage(null)
+                      try {
+                        const res = await fetch(`/api/jobs/${job.id}/aod/send`, { method: 'POST' })
+                        if (res.ok) {
+                          setAodMessage('✅ AOD sent to info@honorremovals.com.au')
+                        } else {
+                          const d = await res.json() as { error?: string }
+                          setAodMessage(`❌ ${d.error ?? 'Send failed'}`)
+                        }
+                      } catch {
+                        setAodMessage('❌ Network error sending AOD')
+                      } finally {
+                        setAodSending(false)
+                      }
+                    }}
+                  >
+                    {aodSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    {aodSending ? 'Sending…' : 'Send to Onur'}
+                  </Button>
+                  {aodMessage && (
+                    <p className="text-xs text-[#94a3b8]">{aodMessage}</p>
+                  )}
                 </div>
               </div>
 
@@ -835,7 +865,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                   body: JSON.stringify({ signatureDataUrl }),
                 })
                 if (res.ok) {
-                  // Refresh job to get aod_pdf_url + aod_signed_at
+                  // Refresh job to get signed_aod_url + signed_aod_at
                   const refresh = await fetch(`/api/jobs/${job.id}`)
                   if (refresh.ok) {
                     const { job: updated } = await refresh.json() as { job: Job }

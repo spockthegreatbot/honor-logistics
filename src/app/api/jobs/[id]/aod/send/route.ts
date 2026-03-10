@@ -28,11 +28,11 @@ export async function POST(
   try {
     const { id } = await params
 
-    // Fetch job with AOD info
+    // Fetch job with both AOD fields
     const { data: job, error: jobError } = await supabaseAdmin
       .from('jobs')
       .select(`
-        id, job_number, aod_pdf_url, aod_signed_at,
+        id, job_number, signed_aod_url, signed_aod_at, aod_pdf_url,
         clients(name),
         end_customers(name)
       `)
@@ -43,50 +43,70 @@ export async function POST(
       return NextResponse.json({ error: 'Job not found' }, { status: 404 })
     }
 
-    if (!job.aod_pdf_url) {
-      return NextResponse.json({ error: 'No AOD generated yet — generate signature first' }, { status: 400 })
-    }
-
-    // Download PDF from URL
-    const pdfResponse = await fetch(job.aod_pdf_url)
-    if (!pdfResponse.ok) {
-      return NextResponse.json({ error: 'Failed to retrieve AOD PDF' }, { status: 500 })
-    }
-    const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer())
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const raw = job as any
+    const signedAodUrl: string | null = raw.signed_aod_url ?? null
+    const signedAodAt: string | null = raw.signed_aod_at ?? null
+    const efexAodUrl: string | null = raw.aod_pdf_url ?? null
+
+    if (!signedAodUrl && !efexAodUrl) {
+      return NextResponse.json({ error: 'No AOD documents found — generate a customer signature or wait for EFEX to email the AOD' }, { status: 400 })
+    }
+
     const clients = Array.isArray(raw.clients) ? (raw.clients[0] as { name: string } | undefined) ?? null : raw.clients as { name: string } | null
     const endCustomers = Array.isArray(raw.end_customers) ? (raw.end_customers[0] as { name: string } | undefined) ?? null : raw.end_customers as { name: string } | null
-    const dateStr = job.aod_signed_at
-      ? new Date(job.aod_signed_at).toLocaleDateString('en-AU')
-      : new Date().toLocaleDateString('en-AU')
     const jobNum = job.job_number ?? id
+    const customerName = endCustomers?.name ?? clients?.name ?? 'Customer'
+    const dateStr = signedAodAt
+      ? new Date(signedAodAt).toLocaleDateString('en-AU')
+      : new Date().toLocaleDateString('en-AU')
 
-    // Send email to Onur
+    // Build attachments
+    const attachments: nodemailer.SendMailOptions['attachments'] = []
+
+    if (signedAodUrl) {
+      const res = await fetch(signedAodUrl)
+      if (!res.ok) return NextResponse.json({ error: 'Failed to retrieve customer-signed AOD PDF' }, { status: 500 })
+      attachments.push({
+        filename: `Signed-AOD-${jobNum}.pdf`,
+        content: Buffer.from(await res.arrayBuffer()),
+        contentType: 'application/pdf',
+      })
+    }
+
+    if (efexAodUrl) {
+      const res = await fetch(efexAodUrl)
+      if (!res.ok) return NextResponse.json({ error: 'Failed to retrieve EFEX AOD PDF' }, { status: 500 })
+      attachments.push({
+        filename: `EFEX-AOD-${jobNum}.pdf`,
+        content: Buffer.from(await res.arrayBuffer()),
+        contentType: 'application/pdf',
+      })
+    }
+
+    // Build body description of what's attached
+    const attachedDesc = [
+      signedAodUrl ? 'Customer Signature AOD' : null,
+      efexAodUrl ? 'EFEX AOD' : null,
+    ].filter(Boolean).join(' + ')
+
     await transporter.sendMail({
       from: '"Honor Logistics" <automation@honorremovals.com.au>',
       to: 'info@honorremovals.com.au',
-      subject: `AOD – Job ${jobNum} – ${endCustomers?.name ?? clients?.name ?? 'Customer'} – ${dateStr}`,
+      subject: `AOD – Job ${jobNum} – ${customerName} – ${dateStr}`,
       html: `
         <p>Hi Onur,</p>
-        <p>Please find attached the signed <strong>Acknowledgment of Delivery</strong> for:</p>
+        <p>Please find attached the <strong>Acknowledgment of Delivery</strong> documents for:</p>
         <ul>
           <li><strong>Job:</strong> ${jobNum}</li>
           <li><strong>Customer:</strong> ${endCustomers?.name ?? '—'}</li>
           <li><strong>Client:</strong> ${clients?.name ?? '—'}</li>
-          <li><strong>Signed:</strong> ${dateStr}</li>
+          <li><strong>Date:</strong> ${dateStr}</li>
         </ul>
-        <p>Review and forward to EFEX when ready.</p>
+        <p><strong>Attached:</strong> ${attachedDesc}</p>
         <p style="color:#888;font-size:12px;margin-top:24px;">Honor Removals &amp; Logistics | automation@honorremovals.com.au</p>
       `,
-      attachments: [
-        {
-          filename: `AOD-${jobNum}-${dateStr.replace(/\//g, '-')}.pdf`,
-          content: pdfBuffer,
-          contentType: 'application/pdf',
-        },
-      ],
+      attachments,
     })
 
     return NextResponse.json({ success: true })
