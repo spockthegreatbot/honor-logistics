@@ -379,12 +379,19 @@ export function KanbanBoard({ initialJobs, onJobClick }: Props) {
     ? jobs.filter(j => j.clients?.name === clientFilter)
     : jobs
 
-  // Group jobs by derived column
+  // Group jobs by derived column, sorted earliest scheduled_date first (nulls last)
   const byColumn = COLUMNS.reduce<Record<string, Job[]>>((acc, col) => {
-    acc[col.id] = visibleJobs.filter(j => {
+    const colJobs = visibleJobs.filter(j => {
       if (col.id === 'archived') return j.archived === true
       return !j.archived && deriveColumn(j) === col.id
     })
+    colJobs.sort((a, b) => {
+      if (!a.scheduled_date && !b.scheduled_date) return 0
+      if (!a.scheduled_date) return 1
+      if (!b.scheduled_date) return -1
+      return a.scheduled_date.localeCompare(b.scheduled_date)
+    })
+    acc[col.id] = colJobs
     return acc
   }, {})
 
