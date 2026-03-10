@@ -47,7 +47,25 @@ function wrapText(text: string, maxWidth: number, font: PDFFont, size: number): 
   return lines.length ? lines : ['']
 }
 
+// Strip all control characters (newlines, tabs etc.) from any string going into pdf-lib
+function s(val: string | null | undefined): string {
+  return (val ?? '').replace(/[\x00-\x1F\x7F]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 export async function generateAODPdf(job: AODJobData, signatureDataUrl: string): Promise<Buffer> {
+  // Sanitize all job fields upfront — WinAnsi cannot encode control chars
+  const safe = {
+    jobNumber:       s(job.jobNumber),
+    jobType:         s(job.jobType),
+    clientName:      s(job.clientName),
+    endCustomerName: s(job.endCustomerName),
+    deliveryAddress: s(job.deliveryAddress),
+    machineModel:    s(job.machineModel),
+    serialNumber:    s(job.serialNumber),
+    scheduledDate:   s(job.scheduledDate),
+    notes:           s(job.notes),
+  }
+
   const doc = await PDFDocument.create()
   const page = doc.addPage([A4_W, A4_H])
 
@@ -161,13 +179,13 @@ export async function generateAODPdf(job: AODJobData, signatureDataUrl: string):
   // ── Job Details ───────────────────────────────────────────────────────────
   section('Job Details')
   fieldRow(
-    'Job Number', job.jobNumber,
-    'Service Type', job.jobType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+    'Job Number', safe.jobNumber,
+    'Service Type', safe.jobType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
   )
-  fieldRow('Client', job.clientName, 'Staff', job.staffName)
+  fieldRow('Client', safe.clientName, 'Staff', null)
   fieldRow(
     'Scheduled',
-    job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString('en-AU') : null,
+    safe.scheduledDate ? new Date(safe.scheduledDate).toLocaleDateString('en-AU') : null,
     'Completed',
     job.completedAt ? new Date(job.completedAt).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }) : 'On delivery',
   )
@@ -175,20 +193,20 @@ export async function generateAODPdf(job: AODJobData, signatureDataUrl: string):
 
   // ── Customer & Delivery ───────────────────────────────────────────────────
   section('Customer & Delivery')
-  field('Customer', job.endCustomerName)
-  field('Address', job.deliveryAddress)
+  field('Customer', safe.endCustomerName)
+  field('Address', safe.deliveryAddress)
   cursorY -= 6
 
   // ── Machine Details ───────────────────────────────────────────────────────
   section('Machine Details')
-  fieldRow('Make', job.machineMake, 'Model', job.machineModel)
-  field('Serial No.', job.serialNumber)
+  fieldRow('Make', null, 'Model', safe.machineModel)
+  field('Serial No.', safe.serialNumber)
   cursorY -= 6
 
   // ── Notes ─────────────────────────────────────────────────────────────────
-  if (job.notes) {
+  if (safe.notes) {
     section('Notes')
-    const noteLines = wrapText(job.notes, A4_W - MARGIN * 2, normal, 8)
+    const noteLines = wrapText(safe.notes, A4_W - MARGIN * 2, normal, 8)
     noteLines.forEach((line, i) => {
       text(line, MARGIN, cursorY - i * 10, normal, 8, C_BODY)
     })
@@ -233,7 +251,7 @@ export async function generateAODPdf(job: AODJobData, signatureDataUrl: string):
   text('Date & Time:', sideX, cursorY - 6,  bold,   7.5, C_MID)
   text(nowStr,        sideX, cursorY - 17, normal,  8,   C_BODY)
   text('Signed by:',  sideX, cursorY - 34,  bold,   7.5, C_MID)
-  text(job.endCustomerName || 'Customer', sideX, cursorY - 45, normal, 8, C_BODY)
+  text(safe.endCustomerName || 'Customer', sideX, cursorY - 45, normal, 8, C_BODY)
 
   cursorY -= sigH + 12
 
