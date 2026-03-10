@@ -109,7 +109,6 @@ export function SignaturePad({ isOpen, onClose, onConfirm, jobNumber }: Signatur
         <Button
           size="sm"
           onClick={handleConfirm}
-          disabled={!hasSignature}
           className="flex-1 flex items-center justify-center gap-2 py-3 text-base"
         >
           <CheckCircle2 className="w-5 h-5" />
