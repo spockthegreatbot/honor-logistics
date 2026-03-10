@@ -22,14 +22,19 @@ interface Job {
 }
 
 const JOB_TYPE_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
-  runup:      { bg: 'bg-amber-500/20 border-amber-500/30',   text: 'text-amber-300', dot: 'bg-amber-400' },
-  delivery:   { bg: 'bg-blue-500/20 border-blue-500/30',     text: 'text-blue-300',  dot: 'bg-blue-400' },
-  collection: { bg: 'bg-purple-500/20 border-purple-500/30', text: 'text-purple-300',dot: 'bg-purple-400' },
-  install:    { bg: 'bg-green-500/20 border-green-500/30',   text: 'text-green-300', dot: 'bg-green-400' },
-  toner_ship: { bg: 'bg-orange-500/20 border-orange-500/30', text: 'text-orange-300',dot: 'bg-orange-400' },
-  inwards:    { bg: 'bg-cyan-500/20 border-cyan-500/30',     text: 'text-cyan-300',  dot: 'bg-cyan-400' },
-  outwards:   { bg: 'bg-cyan-500/20 border-cyan-500/30',     text: 'text-cyan-300',  dot: 'bg-cyan-400' },
-  storage:    { bg: 'bg-slate-500/20 border-slate-500/30',   text: 'text-slate-300', dot: 'bg-slate-400' },
+  runup:               { bg: 'bg-amber-500/20 border-amber-500/30',   text: 'text-amber-300',  dot: 'bg-amber-400' },
+  delivery:            { bg: 'bg-blue-500/20 border-blue-500/30',     text: 'text-blue-300',   dot: 'bg-blue-400' },
+  collection:          { bg: 'bg-purple-500/20 border-purple-500/30', text: 'text-purple-300', dot: 'bg-purple-400' },
+  pickup:              { bg: 'bg-purple-500/20 border-purple-500/30', text: 'text-purple-300', dot: 'bg-purple-400' },
+  install:             { bg: 'bg-green-500/20 border-green-500/30',   text: 'text-green-300',  dot: 'bg-green-400' },
+  installation:        { bg: 'bg-green-500/20 border-green-500/30',   text: 'text-green-300',  dot: 'bg-green-400' },
+  delivery_install:    { bg: 'bg-cyan-500/20 border-cyan-500/30',     text: 'text-cyan-300',   dot: 'bg-cyan-400' },
+  relocation_install:  { bg: 'bg-indigo-500/20 border-indigo-500/30', text: 'text-indigo-300', dot: 'bg-indigo-400' },
+  toner_ship:          { bg: 'bg-orange-500/20 border-orange-500/30', text: 'text-orange-300', dot: 'bg-orange-400' },
+  toner:               { bg: 'bg-orange-500/20 border-orange-500/30', text: 'text-orange-300', dot: 'bg-orange-400' },
+  inwards:             { bg: 'bg-cyan-500/20 border-cyan-500/30',     text: 'text-cyan-300',   dot: 'bg-cyan-400' },
+  outwards:            { bg: 'bg-cyan-500/20 border-cyan-500/30',     text: 'text-cyan-300',   dot: 'bg-cyan-400' },
+  storage:             { bg: 'bg-slate-500/20 border-slate-500/30',   text: 'text-slate-300',  dot: 'bg-slate-400' },
 }
 
 interface Props {

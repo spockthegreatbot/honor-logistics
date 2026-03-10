@@ -13,9 +13,10 @@ export default async function CalendarPage() {
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, job_number, job_type, status, scheduled_date, clients(name), end_customers(name)')
+    .select('id, job_number, job_type, status, scheduled_date, archived, clients(name), end_customers(name)')
     .not('scheduled_date', 'is', null)
-    .not('status', 'in', '(cancelled)')
+    .not('status', 'in', '(cancelled,done,complete,completed,invoiced)')
+    .neq('archived', true)
     .gte('scheduled_date', from)
     .lte('scheduled_date', to)
     .order('scheduled_date', { ascending: true })
