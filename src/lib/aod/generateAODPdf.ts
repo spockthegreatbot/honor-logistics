@@ -69,7 +69,10 @@ export async function generateAODPdf(job: AODJobData, signatureDataUrl: string):
     size: number,
     color = C_BODY,
   ) => {
-    page.drawText(str, { x, y: yTop - size, font, size, color })
+    // WinAnsi cannot encode control chars — strip newlines and non-printable chars
+    const safe = str.replace(/[\x00-\x1F\x7F]/g, ' ').trim()
+    if (!safe) return
+    page.drawText(safe, { x, y: yTop - size, font, size, color })
   }
 
   const textRight = (
