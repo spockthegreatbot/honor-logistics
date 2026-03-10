@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { fetchUnreadEmails, markAsRead } from '@/lib/imap'
 import { parseBookingForm } from '@/lib/docx-parser'
 import { parseAxusJobPdf } from '@/lib/axus-pdf-parser'
+import { parseAxusEmailBody } from '@/lib/axus-body-parser'
 
 const BOT_TOKEN = process.env.HONOR_BOT_TOKEN!
 const GROUP_CHAT_ID = process.env.HONOR_GROUP_CHAT_ID!
@@ -430,7 +431,115 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // 0b. Axus thread replies (RE:/FW:)
+      // 0b. Axus email WITHOUT "Job NoComment" PDF — attempt body parsing
+      if (isAxusEmail && !axusJobPdf && !isThreadReply) {
+        const bodyData = parseAxusEmailBody(email.subject, email.body)
+
+        if (bodyData && bodyData.axusJobNumber) {
+          const clientRef = `AXUS-${bodyData.axusJobNumber}`
+          const { data: existing } = await supabase.from('jobs')
+            .select('id, job_number').eq('client_reference', clientRef).maybeSingle()
+
+          if (existing) {
+            results.push(`Skipped duplicate ${clientRef} (exists as ${existing.job_number})`)
+          } else {
+            // Get Axus client ID
+            const { data: axusClient } = await supabase.from('clients')
+              .select('id').ilike('name', '%axus%').limit(1).single()
+            const axusClientId = axusClient?.id ?? null
+
+            // Look up or create end_customer
+            let endCustomerId: string | null = null
+            if (axusClientId && bodyData.shipToName) {
+              const firstName = bodyData.shipToName.split(' ')[0]
+              const { data: ec } = await supabase.from('end_customers')
+                .select('id').eq('client_id', axusClientId)
+                .ilike('name', `%${firstName}%`).limit(1).single()
+              if (ec?.id) {
+                endCustomerId = ec.id
+              } else {
+                const { data: newEc } = await supabase.from('end_customers').insert({
+                  name: bodyData.shipToName,
+                  client_id: axusClientId,
+                  contact_name: bodyData.shipToAttn || null,
+                  contact_phone: bodyData.shipToPhone || null,
+                  address: bodyData.shipToAddress || null,
+                }).select('id').single()
+                endCustomerId = newEc?.id ?? null
+              }
+            }
+
+            // Generate job number
+            const year = new Date().getFullYear()
+            const { data: maxJob } = await supabase.from('jobs').select('job_number')
+              .ilike('job_number', `HRL-${year}-%`).order('job_number', { ascending: false }).limit(1).single()
+            let seq = 1
+            if (maxJob?.job_number) {
+              const lastSeq = parseInt(maxJob.job_number.split('-')[2], 10)
+              if (!isNaN(lastSeq)) seq = lastSeq + 1
+            }
+            const jobNumber = `HRL-${year}-${String(seq).padStart(4, '0')}`
+
+            const { data: newJob, error: jobErr } = await supabase.from('jobs').insert({
+              job_number: jobNumber,
+              job_type: bodyData.jobType ?? 'delivery',
+              order_types: [bodyData.jobType ?? 'delivery'],
+              status: 'new',
+              client_id: axusClientId,
+              end_customer_id: endCustomerId,
+              contact_name: bodyData.shipToAttn || null,
+              contact_phone: bodyData.shipToPhone || null,
+              scheduled_date: bodyData.dateDue ?? null,
+              address_to: bodyData.shipToAddress || null,
+              machine_model: bodyData.machineModel || null,
+              serial_number: bodyData.serialNumber || null,
+              notes: `Auto-created from Axus email body (no PDF). Review & verify.`,
+              client_reference: clientRef,
+              has_aod: false,
+            }).select('id').single()
+
+            if (jobErr) {
+              console.error('Axus body-parse job create error:', jobErr)
+              results.push(`${clientRef}: body-parse job create failed — ${jobErr.message}`)
+            } else {
+              await sendTelegram(
+                `🆕 <b>New AXUS Job (body-parsed) — ${jobNumber}</b>\n` +
+                `📋 Type: ${(bodyData.jobType ?? 'delivery').charAt(0).toUpperCase() + (bodyData.jobType ?? 'delivery').slice(1)}\n` +
+                `👤 Customer: ${bodyData.shipToName ?? 'Unknown'}\n` +
+                `📍 Deliver To: ${bodyData.shipToAddress ?? 'N/A'}\n` +
+                `🔧 Machine: ${bodyData.machineModel ?? 'N/A'} | S/N: ${bodyData.serialNumber ?? 'N/A'}\n` +
+                (bodyData.dateDue ? `📅 Due: ${bodyData.dateDue}\n` : '') +
+                `⚠️ Created from email body — verify details.\n` +
+                `🔗 https://crm.honorremovals.com.au/jobs`
+              )
+              results.push(`Created AXUS job ${jobNumber} via body-parse (Axus Job# ${bodyData.axusJobNumber})`)
+              console.log(`Created AXUS body-parse job ${jobNumber} id=${newJob?.id}`)
+            }
+          }
+        } else {
+          // Could not parse job number at all
+          await sendTelegram(
+            `📧 <b>Axus email received — could not auto-parse.</b> Review manually.\n` +
+            `Subject: ${email.subject}\n` +
+            `🔗 https://crm.honorremovals.com.au/jobs`
+          )
+          results.push('Axus email — no job number found, alert sent')
+        }
+
+        await supabase.from('email_log').insert({
+          direction: 'inbound', from_email: email.from, from_name: email.fromName,
+          from_address: email.from, subject: email.subject, body_text: email.body,
+          body_preview: email.body.slice(0, 500), received_at: email.receivedAt.toISOString(),
+          client_id: null, ms_message_id: email.messageId, raw_message_id: email.messageId,
+          status: 'received', processed: true,
+        })
+
+        uidsToMark.push(email.uid)
+        processedCount++
+        continue
+      }
+
+      // 0c. Axus thread replies (RE:/FW:)
       if (isAxusEmail && isThreadReply) {
         const jobNumMatch = email.subject.match(/\[Axus_Group Job#(\d+)/)
         const axusJobNum = jobNumMatch?.[1]

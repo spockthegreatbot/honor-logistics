@@ -834,19 +834,35 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                 />
               </div>
 
-              {/* EFEX AOD Section */}
+              {/* AOD / Digital Signature Section */}
               <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130]">
-                <p className="text-sm font-semibold text-[#f1f5f9] mb-3">📎 EFEX AOD</p>
+                <p className="text-sm font-semibold text-[#f1f5f9] mb-3">✍️ AOD / Digital Signature</p>
                 <div className="space-y-3">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input type="checkbox" checked={hasAod} onChange={e => setHasAod(e.target.checked)} className="w-4 h-4 accent-orange-500" />
-                    <span className="text-sm text-[#f1f5f9]">EFEX has sent AOD PDF for this job</span>
+                    <span className="text-sm text-[#f1f5f9]">AOD PDF exists for this job</span>
                   </label>
+                  {!job?.aod_pdf_url && (
+                    <div className="space-y-2">
+                      <Button
+                        className="w-full flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white"
+                        size="sm"
+                        disabled={aodGenerating}
+                        onClick={() => { setAodMessage(null); setShowSignaturePad(true) }}
+                      >
+                        {aodGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenLine className="w-4 h-4" />}
+                        {aodGenerating ? 'Generating…' : 'Get Customer Signature'}
+                      </Button>
+                      {aodMessage && (
+                        <p className="text-xs text-red-400">{aodMessage}</p>
+                      )}
+                    </div>
+                  )}
                   {job?.aod_pdf_url ? (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
                         <FileText className="w-4 h-4 text-green-400 shrink-0" />
-                        <p className="text-sm text-green-400 font-medium">EFEX AOD PDF attached</p>
+                        <p className="text-sm text-green-400 font-medium">AOD PDF attached</p>
                       </div>
                       <div className="flex gap-2">
                         <a href={job.aod_pdf_url} target="_blank" rel="noopener noreferrer" className="flex-1">
@@ -860,10 +876,37 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                           </Button>
                         </a>
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full flex items-center gap-2"
+                        disabled={aodSending}
+                        onClick={async () => {
+                          setAodSending(true)
+                          setAodMessage(null)
+                          try {
+                            const res = await fetch(`/api/jobs/${job.id}/aod/send`, { method: 'POST' })
+                            if (res.ok) {
+                              setAodMessage('✅ AOD sent to info@honorremovals.com.au')
+                            } else {
+                              const d = await res.json() as { error?: string }
+                              setAodMessage(`❌ ${d.error ?? 'Send failed'}`)
+                            }
+                          } catch {
+                            setAodMessage('❌ Network error sending AOD')
+                          } finally {
+                            setAodSending(false)
+                          }
+                        }}
+                      >
+                        {aodSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        {aodSending ? 'Sending…' : 'Send to Onur'}
+                      </Button>
+                      {aodMessage && (
+                        <p className="text-xs text-[#94a3b8]">{aodMessage}</p>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-xs text-[#94a3b8]">AOD will auto-attach when EFEX emails it. Check back after receiving their email.</p>
-                  )}
+                  ) : null}
                 </div>
               </div>
 
