@@ -48,10 +48,8 @@ export function SignaturePad({ isOpen, onClose, onConfirm, jobNumber }: Signatur
   }
 
   const handleConfirm = () => {
-    // Always check isEmpty() directly on the ref — more reliable than state on mobile
-    if (!sigRef.current || sigRef.current.isEmpty()) {
-      return
-    }
+    if (!sigRef.current) return
+    // Skip isEmpty() — unreliable when canvas is CSS-sized; just get the data URL
     const dataUrl = sigRef.current.getTrimmedCanvas().toDataURL('image/png')
     onConfirm(dataUrl)
   }
