@@ -104,8 +104,8 @@ export async function parseAxusJobPdf(buffer: Buffer): Promise<AxusJobData> {
   const customerAddress = addrM ? `${addrM[1].trim()}, ${addrM[2].trim()}` : ''
   const shipToAddress = customerAddress
 
-  // ── Attn: appears after "Attn: Attn:" header, duplicated across columns ───
-  const attnRaw = text.match(/Attn:\s*Attn:\s*[\r\n]+([^\r\n]+)/)?.[1]?.trim() ?? ''
+  // ── Attn: appears after "Job#" label (two-column layout puts name there), duplicated ──
+  const attnRaw = text.match(/Job#\s*[\r\n]+([^\r\n]{2,80})/)?.[1]?.trim() ?? ''
   const attnWords = attnRaw.split(/\s+/)
   const half = Math.floor(attnWords.length / 2)
   const attn = (half > 0 && attnWords.slice(0, half).join(' ') === attnWords.slice(half).join(' '))
