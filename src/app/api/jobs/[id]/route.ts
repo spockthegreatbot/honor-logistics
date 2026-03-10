@@ -18,6 +18,8 @@ const JOB_PATCH_FIELDS = [
   'parking', 'parking_comment', 'pickup_model', 'pickup_accessories', 'pickup_serial',
   'pickup_disposition', 'special_instructions', 'has_aod', 'aod_pdf_url', 'aod_signed_at',
   'serial_number', 'job_type', 'machine_model',
+  // Job board fields
+  'archived', 'runup_completed', 'board_column',
 ]
 
 export async function PATCH(

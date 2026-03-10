@@ -23,14 +23,18 @@ interface Job {
   status: string | null
   serial_number: string | null
   scheduled_date: string | null
+  address_to?: string | null
   po_number: string | null
   notes: string | null
   client_reference: string | null
   parent_job_id: string | null
   machine_model?: string | null
   created_at: string | null
+  archived?: boolean | null
+  runup_completed?: boolean | null
+  board_column?: string | null
   clients?: { name: string; color_code?: string | null } | null
-  end_customers?: { name: string } | null
+  end_customers?: { name: string; address?: string | null } | null
   staff?: { name: string } | null
   runup_details?: { check_signed_off: boolean | null } | null
 }
