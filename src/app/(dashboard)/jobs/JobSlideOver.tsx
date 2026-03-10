@@ -121,8 +121,6 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState('')
   const [scheduledDate, setScheduledDate] = useState('')
-  const [poNumber, setPoNumber] = useState('')
-  const [clientReference, setClientReference] = useState('')
   const [clientId, setClientId] = useState('')
   const [endCustomerId, setEndCustomerId] = useState('')
   const [assignedTo, setAssignedTo] = useState('')
@@ -164,8 +162,6 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         setNotes(j.notes ?? '')
         setStatus(j.status ?? '')
         setScheduledDate(j.scheduled_date ?? '')
-        setPoNumber(j.po_number ?? '')
-        setClientReference(j.client_reference ?? '')
         setClientId(j.client_id ?? '')
         setEndCustomerId(j.end_customer_id ?? '')
         setAssignedTo(j.assigned_to ?? '')
@@ -229,8 +225,6 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
           notes,
           status,
           scheduled_date: scheduledDate || null,
-          po_number: poNumber || null,
-          client_reference: clientReference || null,
           client_id: clientId || null,
           end_customer_id: endCustomerId || null,
           assigned_to: assignedTo || null,
@@ -369,222 +363,292 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
             <div className="p-6 text-center text-[#94a3b8]">Job not found</div>
           ) : (
             <div className="p-5 space-y-6">
-              {/* Job Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Type</p>
-                  <p className="text-sm font-medium text-[#f1f5f9]">
-                    {(job.order_types && job.order_types.length > 0)
-                      ? job.order_types.map(t => ({delivery:'Delivery',installation:'Installation',pickup:'Pick-Up',relocation:'Relocation'}[t]??t)).join(' + ')
-                      : jobTypeLabel(job.job_type)
-                    }
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Scheduled Date</p>
-                  <input
-                    type="date"
-                    value={scheduledDate}
-                    onChange={e => setScheduledDate(e.target.value)}
-                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500 [color-scheme:dark]"
-                  />
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Client</p>
-                  <select
-                    value={clientId}
-                    onChange={e => setClientId(e.target.value)}
-                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  >
-                    <option value="">— None —</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">End Customer</p>
-                  <select
-                    value={endCustomerId}
-                    onChange={e => setEndCustomerId(e.target.value)}
-                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  >
-                    <option value="">— None —</option>
-                    {endCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                {(job.end_customers?.name ?? job.notes?.match(/Customer: ([^\n]+)/)?.[1]?.trim()) && (
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Customer</p>
-                    <p className="text-sm text-[#f1f5f9] py-1">{job.end_customers?.name ?? job.notes?.match(/Customer: ([^\n]+)/)?.[1]?.trim()}</p>
-                  </div>
-                )}
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Serial</p>
-                  <p className="text-sm font-mono text-[#f1f5f9] py-1">{job.serial_number ?? '—'}</p>
-                </div>
-                {job.machines?.model && (
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Machine</p>
-                    <p className="text-sm text-[#f1f5f9] py-1">{job.machines.model}</p>
-                  </div>
-                )}
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">PO #</p>
-                  <input
-                    type="text"
-                    value={poNumber}
-                    onChange={e => setPoNumber(e.target.value)}
-                    placeholder="—"
-                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Client Ref</p>
-                  <input
-                    type="text"
-                    value={clientReference}
-                    onChange={e => setClientReference(e.target.value)}
-                    placeholder="—"
-                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Assigned To</p>
-                  <select
-                    value={assignedTo}
-                    onChange={e => setAssignedTo(e.target.value)}
-                    className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  >
-                    <option value="">— Unassigned —</option>
-                    {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
+              {(() => {
+                const isAxus = (job.clients?.name ?? '').toLowerCase().includes('axus')
+                const inputCls = 'w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500'
+                const labelCls = 'text-xs uppercase tracking-wider text-[#94a3b8] mb-1 block'
+
+                // Parse Axus notes
+                const notesLines = job.notes?.split('\n') ?? []
+                const faultLine = notesLines.find(l => l.trim() && !l.startsWith('Items:') && !l.startsWith('EDI Label:'))?.trim()
+                const itemsLine = notesLines.find(l => l.startsWith('Items:'))?.replace('Items:', '').trim()
+
+                if (isAxus) {
+                  return (
+                    <>
+                      {/* Axus: Job Details */}
+                      <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Job Details</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className={labelCls}>Job #</p>
+                            <p className="text-sm font-mono font-bold text-orange-400">{job.job_number ?? '—'}</p>
+                          </div>
+                          <div>
+                            <p className={labelCls}>Due Date</p>
+                            <input
+                              type="date"
+                              value={scheduledDate}
+                              onChange={e => setScheduledDate(e.target.value)}
+                              className={inputCls + ' [color-scheme:dark]'}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <p className={labelCls}>Ship To / Customer</p>
+                            <p className="text-sm text-[#f1f5f9]">{job.end_customers?.name ?? '—'}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className={labelCls}>Delivery Address</p>
+                            <input value={addressTo} onChange={e => setAddressTo(e.target.value)} placeholder="—" className={inputCls} />
+                          </div>
+                          <div>
+                            <p className={labelCls}>Contact</p>
+                            <input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="—" className={inputCls} />
+                          </div>
+                          <div>
+                            <p className={labelCls}>Phone</p>
+                            <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="—" className={inputCls} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Axus: Machine */}
+                      <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Machine</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className={labelCls}>Model</p>
+                            <input value={machineModel} onChange={e => setMachineModel(e.target.value)} placeholder="—" className={inputCls} />
+                          </div>
+                          <div>
+                            <p className={labelCls}>Serial #</p>
+                            <input value={serialNumber} onChange={e => setSerialNumber(e.target.value)} placeholder="—" className={inputCls} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Axus: Line Items */}
+                      {itemsLine && (
+                        <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4">
+                          <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] mb-2">Line Items</p>
+                          <p className="text-sm text-[#f1f5f9]">{itemsLine}</p>
+                        </div>
+                      )}
+
+                      {/* Axus: Fault */}
+                      {faultLine && (
+                        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+                          <p className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-1">Fault</p>
+                          <p className="text-sm text-amber-200">{faultLine}</p>
+                        </div>
+                      )}
+                    </>
+                  )
+                }
+
+                // EFEX layout
+                const orderTypesList = orderTypes
+                const hasDel = orderTypesList.includes('delivery') || orderTypesList.includes('installation')
+                const hasRel = orderTypesList.includes('relocation')
+                const hasPick = orderTypesList.includes('pickup')
+                const needsAddr = hasDel || hasRel
+
+                const YNBtn = ({ val, cur, onSet, color }: { val: boolean; cur: boolean | null; onSet: (v: boolean | null) => void; color: 'green' | 'red' }) => (
+                  <button type="button" onClick={() => onSet(cur === val ? null : val)}
+                    className={`px-3 py-1 rounded-lg border text-xs font-bold transition ${cur === val
+                      ? color === 'green' ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-red-500/20 border-red-500/40 text-red-400'
+                      : 'border-[#2a2d3e] text-[#94a3b8] hover:border-[#4a4d5e]'
+                    }`}>{val ? 'YES' : 'NO'}</button>
+                )
+
+                return (
+                  <>
+                    {/* EFEX: Job Info grid */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Job #</p>
+                        <p className="text-sm font-mono font-bold text-orange-400">{job.job_number ?? '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Type</p>
+                        <p className="text-sm font-medium text-[#f1f5f9]">
+                          {(job.order_types && job.order_types.length > 0)
+                            ? job.order_types.map(t => ({delivery:'Delivery',installation:'Installation',pickup:'Pick-Up',relocation:'Relocation'}[t]??t)).join(' + ')
+                            : jobTypeLabel(job.job_type)
+                          }
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Scheduled Date</p>
+                        <input
+                          type="date"
+                          value={scheduledDate}
+                          onChange={e => setScheduledDate(e.target.value)}
+                          className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500 [color-scheme:dark]"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Client</p>
+                        <select
+                          value={clientId}
+                          onChange={e => setClientId(e.target.value)}
+                          className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        >
+                          <option value="">— None —</option>
+                          {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">End Customer</p>
+                        <select
+                          value={endCustomerId}
+                          onChange={e => setEndCustomerId(e.target.value)}
+                          className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        >
+                          <option value="">— None —</option>
+                          {endCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      {(job.end_customers?.name ?? job.notes?.match(/Customer: ([^\n]+)/)?.[1]?.trim()) && (
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Customer</p>
+                          <p className="text-sm text-[#f1f5f9] py-1">{job.end_customers?.name ?? job.notes?.match(/Customer: ([^\n]+)/)?.[1]?.trim()}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* EFEX: Contact & Schedule */}
+                    <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Contact &amp; Schedule</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className={labelCls}>Contact Name</label>
+                          <input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="—" className={inputCls} />
+                        </div>
+                        <div><label className={labelCls}>Contact Phone</label>
+                          <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="—" className={inputCls} />
+                        </div>
+                      </div>
+                      <div><label className={labelCls}>Time</label>
+                        <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} className={inputCls} />
+                      </div>
+                    </div>
+
+                    {/* EFEX: Machine Details */}
+                    <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Machine Details</p>
+                      <div>
+                        <label className={labelCls}>Model / Part #</label>
+                        <input value={machineModel} onChange={e => setMachineModel(e.target.value)} placeholder="—" className={inputCls} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div><label className={labelCls}>Accessories / Part #</label>
+                          <input value={machineAccessories} onChange={e => setMachineAccessories(e.target.value)} placeholder="—" className={inputCls} />
+                        </div>
+                        <div><label className={labelCls}>Serial #</label>
+                          <input value={serialNumber} onChange={e => setSerialNumber(e.target.value)} placeholder="—" className={inputCls} />
+                        </div>
+                      </div>
+                      {hasDel && (
+                        <div>
+                          <label className={labelCls}>Install IDCA</label>
+                          <div className="flex items-center gap-2">
+                            <YNBtn val={true} cur={installIdca} onSet={setInstallIdca} color="green" />
+                            <YNBtn val={false} cur={installIdca} onSet={setInstallIdca} color="red" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* EFEX: Address */}
+                    {needsAddr && (
+                      <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">
+                          {hasRel ? 'Relocation Addresses' : 'Delivery Address'}
+                        </p>
+                        {hasRel && (
+                          <div><label className={labelCls}>Address FROM</label>
+                            <input value={addressFrom} onChange={e => setAddressFrom(e.target.value)} placeholder="Collection address" className={inputCls} />
+                          </div>
+                        )}
+                        <div><label className={labelCls}>{hasRel ? 'Address TO' : 'Delivery Address'}</label>
+                          <input value={addressTo} onChange={e => setAddressTo(e.target.value)} placeholder="Delivery address" className={inputCls} />
+                        </div>
+                        <div className="space-y-2">
+                          <div>
+                            <label className={labelCls}>Stair Walker</label>
+                            <div className="flex items-center gap-2">
+                              <YNBtn val={true} cur={stairWalker} onSet={setStairWalker} color="green" />
+                              <YNBtn val={false} cur={stairWalker} onSet={setStairWalker} color="red" />
+                              <input value={stairWalkerComment} onChange={e => setStairWalkerComment(e.target.value)} placeholder="Comment…" className={`${inputCls} flex-1`} />
+                            </div>
+                          </div>
+                          <div>
+                            <label className={labelCls}>Parking</label>
+                            <div className="flex items-center gap-2">
+                              <YNBtn val={true} cur={parkingYn} onSet={setParkingYn} color="green" />
+                              <YNBtn val={false} cur={parkingYn} onSet={setParkingYn} color="red" />
+                              <input value={parkingComment} onChange={e => setParkingComment(e.target.value)} placeholder="Parking notes…" className={`${inputCls} flex-1`} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* EFEX: Pick-Up */}
+                    {hasPick && (
+                      <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Pick-Up Details</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div><label className={labelCls}>Pick-Up Model</label>
+                            <input value={pickupModel} onChange={e => setPickupModel(e.target.value)} placeholder="—" className={inputCls} />
+                          </div>
+                          <div><label className={labelCls}>Pick-Up Serial</label>
+                            <input value={pickupSerial} onChange={e => setPickupSerial(e.target.value)} placeholder="—" className={inputCls} />
+                          </div>
+                        </div>
+                        <div><label className={labelCls}>Pick-Up Accessories</label>
+                          <input value={pickupAccessories} onChange={e => setPickupAccessories(e.target.value)} placeholder="—" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Disposition</label>
+                          <div className="flex flex-wrap gap-2">
+                            {['Recycle', 'Refurb', 'Loan', 'Scrap'].map(d => (
+                              <button key={d} type="button" onClick={() => setPickupDisposition(p => p === d ? '' : d)}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                                  pickupDisposition === d ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'border-[#2a2d3e] text-[#94a3b8] hover:border-[#4a4d5e]'
+                                }`}>{d}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* EFEX: Special Instructions */}
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-2">Special Instructions</p>
+                      <textarea value={specialInstructions} onChange={e => setSpecialInstructions(e.target.value)}
+                        rows={3} placeholder="e.g. Call 30 mins prior, loading dock at rear…"
+                        className="w-full rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] placeholder:text-[#94a3b8]/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" />
+                    </div>
+                  </>
+                )
+              })()}
+
+              {/* Common: Assigned Driver */}
+              <div>
+                <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Assigned Driver</p>
+                <select
+                  value={assignedTo}
+                  onChange={e => setAssignedTo(e.target.value)}
+                  className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="">— Unassigned —</option>
+                  {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
               </div>
 
-              {/* Contact info from end customer */}
-              {(job.end_customers?.contact_name || job.end_customers?.contact_phone || job.end_customers?.address) && (
-                <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">Site Contact</p>
-                  {job.end_customers?.contact_name && (
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-[#94a3b8] w-16 shrink-0">Name</span>
-                      <span className="text-sm text-[#f1f5f9]">{job.end_customers.contact_name}</span>
-                    </div>
-                  )}
-                  {job.end_customers?.contact_phone && (
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-[#94a3b8] w-16 shrink-0">Phone</span>
-                      <a href={`tel:${job.end_customers.contact_phone}`} className="text-sm text-orange-400 hover:text-orange-300 transition">
-                        {job.end_customers.contact_phone}
-                      </a>
-                    </div>
-                  )}
-                  {job.end_customers?.address && (
-                    <div className="flex items-start gap-3">
-                      <span className="text-xs text-[#94a3b8] w-16 shrink-0 mt-0.5">Address</span>
-                      <span className="text-sm text-[#f1f5f9]">{job.end_customers.address}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Delivery / Relocation addresses + site requirements */}
-              {job.delivery_details && job.delivery_details.length > 0 && (
-                <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">
-                    {job.delivery_details[0].subtype === 'relocation' ? 'Relocation Details' : 'Delivery Details'}
-                  </p>
-                  {job.delivery_details[0].from_address && (
-                    <div className="flex items-start gap-3">
-                      <span className="text-xs font-medium text-red-400 w-10 shrink-0 mt-0.5">FROM</span>
-                      <span className="text-sm text-[#f1f5f9]">{job.delivery_details[0].from_address}</span>
-                    </div>
-                  )}
-                  {job.delivery_details[0].to_address && (
-                    <div className="flex items-start gap-3">
-                      <span className="text-xs font-medium text-green-400 w-10 shrink-0 mt-0.5">TO</span>
-                      <span className="text-sm text-[#f1f5f9]">{job.delivery_details[0].to_address}</span>
-                    </div>
-                  )}
-                  {/* Always show stair walker + parking */}
-                  <div className="flex gap-4 pt-1 border-t border-[#2a2d3e]">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${job.delivery_details[0].stair_walker ? 'bg-amber-400' : 'bg-[#2a2d3e]'}`} />
-                      <span className={`text-xs ${job.delivery_details[0].stair_walker ? 'text-amber-300 font-medium' : 'text-[#94a3b8]'}`}>
-                        Stair Walker: {job.delivery_details[0].stair_walker ? 'YES ⚠️' : 'No'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${job.delivery_details[0].parking_available ? 'bg-green-400' : 'bg-[#2a2d3e]'}`} />
-                      <span className={`text-xs ${job.delivery_details[0].parking_available ? 'text-green-300' : 'text-[#94a3b8]'}`}>
-                        Parking: {job.delivery_details[0].parking_available ? 'Yes' : 'No / Unknown'}
-                      </span>
-                    </div>
-                  </div>
-                  {job.delivery_details[0].parking_notes && (
-                    <p className="text-xs text-[#94a3b8] italic">{job.delivery_details[0].parking_notes}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Install details */}
-              {job.install_details && job.install_details.length > 0 && (
-                <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[#94a3b8]">Install Details</p>
-                  <div className="flex flex-wrap gap-2">
-                    {job.install_details[0].install_type && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-[#2a2d3e] text-[#f1f5f9]">
-                        {job.install_details[0].install_type}
-                      </span>
-                    )}
-                    {job.install_details[0].fma_required && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-300 font-medium">
-                        ⚠️ FMA Required
-                      </span>
-                    )}
-                    {job.install_details[0].papercut_required && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-300 font-medium">
-                        PaperCut Required
-                      </span>
-                    )}
-                  </div>
-                  {/* Always show stair walker + parking */}
-                  <div className="flex gap-4 pt-1 border-t border-[#2a2d3e]">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${job.install_details[0].stair_walker ? 'bg-amber-400' : 'bg-[#2a2d3e]'}`} />
-                      <span className={`text-xs ${job.install_details[0].stair_walker ? 'text-amber-300 font-medium' : 'text-[#94a3b8]'}`}>
-                        Stair Walker: {job.install_details[0].stair_walker ? 'YES ⚠️' : 'No'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${job.install_details[0].parking_available ? 'bg-green-400' : 'bg-[#2a2d3e]'}`} />
-                      <span className={`text-xs ${job.install_details[0].parking_available ? 'text-green-300' : 'text-[#94a3b8]'}`}>
-                        Parking: {job.install_details[0].parking_available ? 'Yes' : 'No / Unknown'}
-                      </span>
-                    </div>
-                  </div>
-                  {job.install_details[0].parking_notes && (
-                    <p className="text-xs text-[#94a3b8] italic">{job.install_details[0].parking_notes}</p>
-                  )}
-                  {job.install_details[0].fma_notes && (
-                    <p className="text-xs text-[#94a3b8]">{job.install_details[0].fma_notes}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Parent Job link */}
-              {job.parent_job_id && (
-                <div className="rounded-lg bg-[#1e2130] border border-[#2a2d3e] px-4 py-2.5 flex items-center gap-2">
-                  <span className="text-xs text-[#94a3b8]">Bundle:</span>
-                  <button
-                    onClick={() => { onClose(); setTimeout(() => onJobUpdated?.({ ...job }), 100) }}
-                    className="text-xs font-mono font-medium text-orange-400 hover:text-orange-300 transition"
-                  >
-                    Parent Job
-                  </button>
-                </div>
-              )}
-
-              {/* Status update */}
+              {/* Common: Status */}
               <div>
                 <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-2">Update Status</p>
                 <div className="relative">
@@ -594,9 +658,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                     className="w-full h-9 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-3 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
                     {STATUS_ORDER.map((s) => (
-                      <option key={s} value={s} disabled={
-                        s === 'dispatched' && !canDispatch
-                      }>
+                      <option key={s} value={s} disabled={s === 'dispatched' && !canDispatch}>
                         {jobStatusLabel(s)}{s === 'dispatched' && !canDispatch ? ' (run-up required)' : ''}
                       </option>
                     ))}
@@ -611,27 +673,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                 )}
               </div>
 
-              {/* Status Timeline */}
-              <div>
-                <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-3">Status Timeline</p>
-                <div className="space-y-2">
-                  {STATUS_ORDER.map((s, idx) => {
-                    const done = idx <= currentStatusIdx
-                    const current = idx === currentStatusIdx
-                    return (
-                      <div key={s} className={`flex items-center gap-3 text-xs ${done ? 'text-[#f1f5f9]' : 'text-[#94a3b8]/40'}`}>
-                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${current ? 'bg-orange-500 ring-2 ring-orange-500/30' : done ? 'bg-green-400' : 'bg-[#2a2d3e]'}`} />
-                        <span className={current ? 'font-semibold text-orange-400' : ''}>
-                          {jobStatusLabel(s)}
-                        </span>
-                        {current && <span className="text-[#94a3b8]">← current</span>}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Run-Up Checklist */}
+              {/* Common: Run-Up Checklist */}
               {isRunup && (
                 <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130]">
                   <div className="flex items-center justify-between mb-4">
@@ -642,7 +684,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                     {RUNUP_CHECKS.map(({ key, label }) => {
                       const isSignOff = key === 'check_signed_off'
                       const checked = !!(runup?.[key])
-                      if (isSignOff) return null // handled by button below
+                      if (isSignOff) return null
                       return (
                         <label key={key} className="flex items-center gap-3 cursor-pointer group">
                           <div
@@ -684,145 +726,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                 </div>
               )}
 
-              {/* ── EFEX Order Sections ─────────────────────────────── */}
-              {orderTypes.length > 0 && (() => {
-                const hasDel = orderTypes.includes('delivery') || orderTypes.includes('installation')
-                const hasRel = orderTypes.includes('relocation')
-                const hasPick = orderTypes.includes('pickup')
-                const needsAddr = hasDel || hasRel
-
-                const inputCls = 'w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500'
-                const labelCls = 'text-xs uppercase tracking-wider text-[#94a3b8] mb-1 block'
-
-                const YNBtn = ({ val, cur, onSet, color }: { val: boolean; cur: boolean | null; onSet: (v: boolean | null) => void; color: 'green' | 'red' }) => (
-                  <button type="button" onClick={() => onSet(cur === val ? null : val)}
-                    className={`px-3 py-1 rounded-lg border text-xs font-bold transition ${cur === val
-                      ? color === 'green' ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-red-500/20 border-red-500/40 text-red-400'
-                      : 'border-[#2a2d3e] text-[#94a3b8] hover:border-[#4a4d5e]'
-                    }`}>{val ? 'YES' : 'NO'}</button>
-                )
-
-                return (
-                  <>
-                    {/* Contact & Schedule */}
-                    <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
-                      <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Contact &amp; Schedule</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div><label className={labelCls}>Contact Name</label>
-                          <input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="—" className={inputCls} />
-                        </div>
-                        <div><label className={labelCls}>Contact Phone</label>
-                          <input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="—" className={inputCls} />
-                        </div>
-                      </div>
-                      <div><label className={labelCls}>Time</label>
-                        <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)} className={inputCls} />
-                      </div>
-                    </div>
-
-                    {/* Machine Details */}
-                    <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
-                      <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Machine Details</p>
-                      <div>
-                        <label className={labelCls}>Model / Part #</label>
-                        <input value={machineModel} onChange={e => setMachineModel(e.target.value)} placeholder="—" className={inputCls} />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div><label className={labelCls}>Accessories / Part #</label>
-                          <input value={machineAccessories} onChange={e => setMachineAccessories(e.target.value)} placeholder="—" className={inputCls} />
-                        </div>
-                        <div><label className={labelCls}>Serial #</label>
-                          <input value={serialNumber} onChange={e => setSerialNumber(e.target.value)} placeholder="—" className={inputCls} />
-                        </div>
-                      </div>
-                      {hasDel && (
-                        <div>
-                          <label className={labelCls}>Install IDCA</label>
-                          <div className="flex items-center gap-2">
-                            <YNBtn val={true} cur={installIdca} onSet={setInstallIdca} color="green" />
-                            <YNBtn val={false} cur={installIdca} onSet={setInstallIdca} color="red" />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Address */}
-                    {needsAddr && (
-                      <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
-                        <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">
-                          {hasRel ? 'Relocation Addresses' : 'Delivery Address'}
-                        </p>
-                        {hasRel && (
-                          <div><label className={labelCls}>Address FROM</label>
-                            <input value={addressFrom} onChange={e => setAddressFrom(e.target.value)} placeholder="Collection address" className={inputCls} />
-                          </div>
-                        )}
-                        <div><label className={labelCls}>{hasRel ? 'Address TO' : 'Delivery Address'}</label>
-                          <input value={addressTo} onChange={e => setAddressTo(e.target.value)} placeholder="Delivery address" className={inputCls} />
-                        </div>
-                        <div className="space-y-2">
-                          <div>
-                            <label className={labelCls}>Stair Walker</label>
-                            <div className="flex items-center gap-2">
-                              <YNBtn val={true} cur={stairWalker} onSet={setStairWalker} color="green" />
-                              <YNBtn val={false} cur={stairWalker} onSet={setStairWalker} color="red" />
-                              <input value={stairWalkerComment} onChange={e => setStairWalkerComment(e.target.value)} placeholder="Comment…" className={`${inputCls} flex-1`} />
-                            </div>
-                          </div>
-                          <div>
-                            <label className={labelCls}>Parking</label>
-                            <div className="flex items-center gap-2">
-                              <YNBtn val={true} cur={parkingYn} onSet={setParkingYn} color="green" />
-                              <YNBtn val={false} cur={parkingYn} onSet={setParkingYn} color="red" />
-                              <input value={parkingComment} onChange={e => setParkingComment(e.target.value)} placeholder="Parking notes…" className={`${inputCls} flex-1`} />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Pick-Up */}
-                    {hasPick && (
-                      <div className="rounded-xl bg-[#1e2130] border border-[#2a2d3e] p-4 space-y-3">
-                        <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">Pick-Up Details</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div><label className={labelCls}>Pick-Up Model</label>
-                            <input value={pickupModel} onChange={e => setPickupModel(e.target.value)} placeholder="—" className={inputCls} />
-                          </div>
-                          <div><label className={labelCls}>Pick-Up Serial</label>
-                            <input value={pickupSerial} onChange={e => setPickupSerial(e.target.value)} placeholder="—" className={inputCls} />
-                          </div>
-                        </div>
-                        <div><label className={labelCls}>Pick-Up Accessories</label>
-                          <input value={pickupAccessories} onChange={e => setPickupAccessories(e.target.value)} placeholder="—" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Disposition</label>
-                          <div className="flex flex-wrap gap-2">
-                            {['Recycle', 'Refurb', 'Loan', 'Scrap'].map(d => (
-                              <button key={d} type="button" onClick={() => setPickupDisposition(p => p === d ? '' : d)}
-                                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
-                                  pickupDisposition === d ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'border-[#2a2d3e] text-[#94a3b8] hover:border-[#4a4d5e]'
-                                }`}>{d}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Special Instructions */}
-                    <div>
-                      <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-2">Special Instructions</p>
-                      <textarea value={specialInstructions} onChange={e => setSpecialInstructions(e.target.value)}
-                        rows={3} placeholder="e.g. Call 30 mins prior, loading dock at rear…"
-                        className="w-full rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] placeholder:text-[#94a3b8]/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none" />
-                    </div>
-                  </>
-                )
-              })()}
-
-              {/* Notes */}
+              {/* Common: Internal Notes */}
               <div>
                 <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-2">Internal Notes</p>
                 <textarea
@@ -834,7 +738,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                 />
               </div>
 
-              {/* AOD / Digital Signature Section */}
+              {/* Common: AOD / Digital Signature */}
               <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130]">
                 <p className="text-sm font-semibold text-[#f1f5f9] mb-3">✍️ AOD / Digital Signature</p>
                 <div className="space-y-3">

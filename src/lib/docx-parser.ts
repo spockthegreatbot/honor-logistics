@@ -21,6 +21,7 @@ export interface BookingFormData {
   pickupSerial: string | null
   pickupDisposal: string | null
   specialInstructions: string | null
+  efexRef: string | null
 }
 
 function stripXml(xml: string): string {
@@ -267,5 +268,6 @@ export async function parseBookingForm(buffer: Buffer): Promise<BookingFormData>
     pickupSerial,
     pickupDisposal,
     specialInstructions,
+    efexRef: null,
   }
 }

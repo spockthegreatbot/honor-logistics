@@ -93,7 +93,7 @@ interface EmailAttachment {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function createJobFromDocx(supabase: any, docxBuffer: Buffer, attachments: EmailAttachment[]): Promise<{ jobId: string; jobNumber: string } | null> {
+async function createJobFromDocx(supabase: any, docxBuffer: Buffer, attachments: EmailAttachment[], subject: string = ''): Promise<{ jobId: string; jobNumber: string } | null> {
   try {
     const data = await parseBookingForm(docxBuffer)
 
@@ -144,22 +144,22 @@ async function createJobFromDocx(supabase: any, docxBuffer: Buffer, attachments:
       if (dm) scheduledDate = `${dm[3]}-${dm[2]}-${dm[1]}`
     }
 
-    // Generate job number: HRL-YYYY-XXXX using MAX sequence
-    const year = new Date().getFullYear()
-    const { data: maxJob } = await supabase
-      .from('jobs')
-      .select('job_number')
-      .ilike('job_number', `HRL-${year}-%`)
-      .order('job_number', { ascending: false })
-      .limit(1)
-      .single()
-
-    let seq = 1
-    if (maxJob?.job_number) {
-      const lastSeq = parseInt(maxJob.job_number.split('-')[2], 10)
-      if (!isNaN(lastSeq)) seq = lastSeq + 1
+    // Use source job number: efexRef if available, else derive from email subject
+    let jobNumber: string
+    if (data.efexRef) {
+      jobNumber = String(data.efexRef)
+    } else {
+      const efexSubjectM = subject.match(/Efex\s*\/\s*([^-]+?)\s*-\s*[^-]+?\s*-\s*(\d{2})-(\d{2})-(\d{4})/i)
+      if (efexSubjectM) {
+        const customer = efexSubjectM[1].trim().replace(/\s+/g, '')
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+        const monthStr = months[parseInt(efexSubjectM[3], 10) - 1] ?? efexSubjectM[3]
+        jobNumber = `EFEX-${customer}-${efexSubjectM[2]}${monthStr}${efexSubjectM[4]}`
+      } else {
+        const normSubj = subject.replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)
+        jobNumber = normSubj ? `EFEX-${normSubj}` : `EFEX-${Date.now()}`
+      }
     }
-    const jobNumber = `HRL-${year}-${String(seq).padStart(4, '0')}`
 
     const jobType = data.orderTypes[0] ?? 'delivery'
 
@@ -340,16 +340,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Generate job number
-        const year = new Date().getFullYear()
-        const { data: maxJob } = await supabase.from('jobs').select('job_number')
-          .ilike('job_number', `HRL-${year}-%`).order('job_number', { ascending: false }).limit(1).single()
-        let seq = 1
-        if (maxJob?.job_number) {
-          const lastSeq = parseInt(maxJob.job_number.split('-')[2], 10)
-          if (!isNaN(lastSeq)) seq = lastSeq + 1
-        }
-        const jobNumber = `HRL-${year}-${String(seq).padStart(4, '0')}`
+        const jobNumber = String(axusData.axusJobNumber)
 
         // Upload job PDF
         const bucket = 'job-documents'
@@ -469,16 +460,7 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            // Generate job number
-            const year = new Date().getFullYear()
-            const { data: maxJob } = await supabase.from('jobs').select('job_number')
-              .ilike('job_number', `HRL-${year}-%`).order('job_number', { ascending: false }).limit(1).single()
-            let seq = 1
-            if (maxJob?.job_number) {
-              const lastSeq = parseInt(maxJob.job_number.split('-')[2], 10)
-              if (!isNaN(lastSeq)) seq = lastSeq + 1
-            }
-            const jobNumber = `HRL-${year}-${String(seq).padStart(4, '0')}`
+            const jobNumber = String(bodyData.axusJobNumber)
 
             const { data: newJob, error: jobErr } = await supabase.from('jobs').insert({
               job_number: jobNumber,
@@ -591,7 +573,7 @@ export async function POST(req: NextRequest) {
 
       if (bookingDocx) {
         // This is an EFEX job booking — parse DOCX and create job
-        const result = await createJobFromDocx(supabase, (bookingDocx as EmailAttachment).content, email.attachments)
+        const result = await createJobFromDocx(supabase, (bookingDocx as EmailAttachment).content, email.attachments, email.subject)
 
         if (result) {
           const data = await parseBookingForm((bookingDocx as EmailAttachment).content)
