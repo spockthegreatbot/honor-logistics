@@ -23,23 +23,20 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid signature data' }, { status: 400 })
     }
 
-    // Fetch full job data
+    // Fetch full job data — simple select, no risky joins
     const { data: job, error: jobError } = await supabaseAdmin
       .from('jobs')
       .select(`
         id, job_number, job_type, status, serial_number, scheduled_date,
-        notes, completed_at, assigned_to,
+        notes, completed_at, assigned_to, address_to, machine_model,
         clients(name),
-        end_customers(name, address),
-        staff:assigned_to(name),
-        machines(make, model),
-        delivery_details(to_address)
+        end_customers(name, address)
       `)
       .eq('id', id)
       .single()
 
     if (jobError || !job) {
-      return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+      return NextResponse.json({ error: `Job not found: ${jobError?.message}` }, { status: 404 })
     }
 
     // Build job data for PDF
@@ -47,21 +44,18 @@ export async function POST(
     const raw = job as any
     const clients = Array.isArray(raw.clients) ? (raw.clients[0] as { name: string } | undefined) ?? null : raw.clients as { name: string } | null
     const endCustomers = Array.isArray(raw.end_customers) ? (raw.end_customers[0] as { name: string; address: string | null } | undefined) ?? null : raw.end_customers as { name: string; address: string | null } | null
-    const staff = Array.isArray(raw.staff) ? (raw.staff[0] as { name: string } | undefined) ?? null : raw.staff as { name: string } | null
-    const machines = Array.isArray(raw.machines) ? (raw.machines[0] as { make: string | null; model: string | null } | undefined) ?? null : raw.machines as { make: string | null; model: string | null } | null
-    const deliveryDetails = (raw.delivery_details as Array<{ to_address: string | null }> | null)?.[0]
 
     const jobData = {
       jobNumber: job.job_number,
       jobType: job.job_type,
       clientName: clients?.name ?? null,
       endCustomerName: endCustomers?.name ?? null,
-      deliveryAddress: deliveryDetails?.to_address ?? endCustomers?.address ?? null,
-      machineMake: machines?.make ?? null,
-      machineModel: machines?.model ?? null,
+      deliveryAddress: raw.address_to ?? endCustomers?.address ?? null,
+      machineMake: null,
+      machineModel: raw.machine_model ?? null,
       serialNumber: job.serial_number,
-      staffName: staff?.name ?? null,
-      completedAt: job.completed_at,
+      staffName: null,
+      completedAt: job.completed_at ?? null,
       scheduledDate: job.scheduled_date,
       notes: job.notes,
     }
@@ -119,7 +113,8 @@ export async function POST(
 
     return NextResponse.json({ success: true, aodUrl })
   } catch (err) {
-    console.error('AOD generate error:', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('AOD generate error:', msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
