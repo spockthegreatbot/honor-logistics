@@ -86,7 +86,8 @@ export async function parseAxusJobPdf(buffer: Buffer): Promise<AxusJobData> {
   const priority = priorityM?.[1] ?? 'Normal'
 
   // ── Dates ─────────────────────────────────────────────────────────────────
-  const dateDueLine = text.match(/Date Due:\s*\n?(\d{1,2}\/\d{1,2}\/\d{2,4})/i)
+  // Real PDF layout: "Date Due:\nQte:\n09/03/26" — allow up to 20 chars between label and date
+  const dateDueLine = text.match(/Date Due:[\s\S]{0,20}?(\d{1,2}\/\d{1,2}\/\d{2,4})/i)
   const dateDue = parseDate(dateDueLine?.[1] ?? null)
   const dateOutLine = text.match(/Date Out:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i)
   const dateOut = parseDate(dateOutLine?.[1] ?? null)
@@ -110,7 +111,8 @@ export async function parseAxusJobPdf(buffer: Buffer): Promise<AxusJobData> {
   const shipToAddress = customerAddress
 
   // ── Phone ─────────────────────────────────────────────────────────────────
-  const phoneM = text.match(/0[2-9][\d\s]{8,12}/)
+  // Restrict to digits and spaces only (not tabs) to avoid bleeding into adjacent column
+  const phoneM = text.match(/0[2-9][\d ]{8,12}/)
   const customerPhone = phoneM?.[0]?.trim() ?? ''
   const shipToPhone = customerPhone
 
