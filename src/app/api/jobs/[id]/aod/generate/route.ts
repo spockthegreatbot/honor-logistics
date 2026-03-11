@@ -28,7 +28,7 @@ export async function POST(
       .from('jobs')
       .select(`
         id, job_number, job_type, status, serial_number, scheduled_date,
-        notes, completed_at, assigned_to, address_to, machine_model, fault_description,
+        notes, completed_at, assigned_to, address_to, machine_model,
         clients(name),
         end_customers(name, address)
       `)
@@ -54,7 +54,7 @@ export async function POST(
       serialNumber: job.serial_number,
       scheduledDate: job.scheduled_date,
       notes: job.notes,
-      faultDescription: raw.fault_description ?? null,
+      faultDescription: null,
     }
 
     // Generate PDF
