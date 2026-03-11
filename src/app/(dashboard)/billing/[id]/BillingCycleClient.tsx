@@ -384,8 +384,6 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
             <LineItem label="Fuel Surcharge 11%" amount={totals.total_fuel_surcharge} indent />
             <LineItem label="Machine Install" amount={totals.total_install} />
             <LineItem label="Storage + Misc" amount={totals.total_storage} />
-            {(totals.total_toner ?? 0) > 0 && <LineItem label="Toner Pack & Ship" amount={totals.total_toner} />}
-            {(totals.total_inwards_outwards ?? 0) > 0 && <LineItem label="Inwards & Outwards" amount={totals.total_inwards_outwards} />}
 
             {/* Discount */}
             <div className="flex justify-between items-center py-1.5">
