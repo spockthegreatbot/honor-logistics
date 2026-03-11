@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import React, { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -73,6 +73,7 @@ interface BillingCycleData {
   total_install: number | null
   total_storage: number | null
   total_toner: number | null
+  total_inwards_outwards: number | null
   subtotal: number | null
   gst_amount: number | null
   grand_total: number | null
@@ -132,6 +133,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
     total_install: cycle.total_install ?? 0,
     total_storage: cycle.total_storage ?? 0,
     total_toner: cycle.total_toner ?? 0,
+    total_inwards_outwards: cycle.total_inwards_outwards ?? 0,
     subtotal: cycle.subtotal ?? 0,
     gst_amount: cycle.gst_amount ?? 0,
     grand_total: cycle.grand_total ?? 0,
@@ -382,7 +384,8 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
             <LineItem label="Fuel Surcharge 11%" amount={totals.total_fuel_surcharge} indent />
             <LineItem label="Machine Install" amount={totals.total_install} />
             <LineItem label="Storage + Misc" amount={totals.total_storage} />
-            {/* Toner is included inside Storage + Misc weekly lines — not billed separately */}
+            {(totals.total_toner ?? 0) > 0 && <LineItem label="Toner Pack & Ship" amount={totals.total_toner} />}
+            {(totals.total_inwards_outwards ?? 0) > 0 && <LineItem label="Inwards & Outwards" amount={totals.total_inwards_outwards} />}
 
             {/* Discount */}
             <div className="flex justify-between items-center py-1.5">
@@ -482,6 +485,12 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                   <span className="flex items-center gap-1.5">
                     <Printer className="w-3.5 h-3.5" />
                     Toner <span className="text-xs opacity-60">({tonerJobs.length})</span>
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="line_items">
+                  <span className="flex items-center gap-1.5">
+                    <Database className="w-3.5 h-3.5" />
+                    All Items
                   </span>
                 </TabsTrigger>
               </TabsList>
@@ -740,6 +749,11 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                 )}
               </Card>
             </TabsContent>
+
+            {/* All Line Items Tab — from billing_line_items (imported Excel data) */}
+            <TabsContent value="line_items">
+              <LineItemsTab cycleId={cycle.id} />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
@@ -944,6 +958,83 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
         </div>
       </Dialog>
     </div>
+  )
+}
+
+const SHEET_LABELS: Record<string, string> = {
+  runup: 'Run Up', install: 'Install', delivery: 'Delivery & Collection',
+  toner: 'Toner', storage: 'Storage', inwards_outwards: 'Inwards & Outwards'
+}
+
+function LineItemsTab({ cycleId }: { cycleId: string }) {
+  const [items, setItems] = React.useState<Record<string, unknown>[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [filter, setFilter] = React.useState('all')
+
+  React.useEffect(() => {
+    fetch(`/api/billing/${cycleId}/line-items`)
+      .then(r => r.json())
+      .then(d => { setItems(d.items ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [cycleId])
+
+  const types = ['all', ...Array.from(new Set(items.map((i: Record<string, unknown>) => i.sheet_type as string))).sort()]
+  const displayed = filter === 'all' ? items : items.filter((i: Record<string, unknown>) => i.sheet_type === filter)
+
+  if (loading) return <Card className="p-6 text-center text-sm text-[#94a3b8]">Loading line items…</Card>
+  if (!items.length) return <Card className="p-6 text-center text-sm text-[#94a3b8]">No line items imported for this cycle.</Card>
+
+  return (
+    <Card>
+      <div className="px-4 py-3 border-b border-[#2a2d3e] flex gap-2 flex-wrap">
+        {types.map(t => (
+          <button key={t} onClick={() => setFilter(t)}
+            className={cn('px-3 py-1 rounded text-xs font-medium transition-colors',
+              filter === t ? 'bg-orange-500/20 text-orange-400' : 'text-[#94a3b8] hover:text-[#f1f5f9]'
+            )}>
+            {t === 'all' ? `All (${items.length})` : `${SHEET_LABELS[t] ?? t} (${items.filter((i: Record<string, unknown>) => i.sheet_type === t).length})`}
+          </button>
+        ))}
+      </div>
+      <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+        <table className="w-full text-xs">
+          <thead className="sticky top-0 bg-[#0f1117]">
+            <tr className="border-b border-[#2a2d3e]">
+              <th className="px-3 py-2 text-left text-[#94a3b8] uppercase">Type</th>
+              <th className="px-3 py-2 text-left text-[#94a3b8] uppercase">Date</th>
+              <th className="px-3 py-2 text-left text-[#94a3b8] uppercase">Customer</th>
+              <th className="px-3 py-2 text-left text-[#94a3b8] uppercase">Description</th>
+              <th className="px-3 py-2 text-left text-[#94a3b8] uppercase hidden md:table-cell">Serial</th>
+              <th className="px-3 py-2 text-right text-[#94a3b8] uppercase">Qty</th>
+              <th className="px-3 py-2 text-right text-[#94a3b8] uppercase">Price</th>
+              <th className="px-3 py-2 text-right text-[#94a3b8] uppercase">Total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#1e2130]">
+            {displayed.map((item: Record<string, unknown>) => (
+              <tr key={item.id as string} className="hover:bg-[#1a1d27]">
+                <td className="px-3 py-1.5 text-[#64748b]">{SHEET_LABELS[item.sheet_type as string] ?? item.sheet_type as string}</td>
+                <td className="px-3 py-1.5 text-[#94a3b8]">{item.job_date ? new Date(item.job_date as string + 'T12:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : '—'}</td>
+                <td className="px-3 py-1.5 text-[#f1f5f9] max-w-[150px] truncate">{(item.customer as string) || (item.notes as string) || '—'}</td>
+                <td className="px-3 py-1.5 text-[#94a3b8] max-w-[200px] truncate">{(item.action as string) || (item.model as string) || '—'}</td>
+                <td className="px-3 py-1.5 text-[#64748b] hidden md:table-cell">{(item.serial as string) || (item.efex_ni as string) || '—'}</td>
+                <td className="px-3 py-1.5 text-right text-[#94a3b8]">{item.qty as number ?? '—'}</td>
+                <td className="px-3 py-1.5 text-right text-[#94a3b8] font-mono">{item.price_ex != null ? `$${(item.price_ex as number).toFixed(2)}` : '—'}</td>
+                <td className="px-3 py-1.5 text-right text-[#f1f5f9] font-mono font-medium">{item.total_ex != null ? `$${(item.total_ex as number).toFixed(2)}` : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t border-[#2a2d3e]">
+            <tr>
+              <td colSpan={7} className="px-3 py-2 text-right text-xs text-[#94a3b8]">Total ex GST</td>
+              <td className="px-3 py-2 text-right text-sm font-bold text-orange-400 font-mono">
+                ${displayed.reduce((s: number, i: Record<string, unknown>) => s + ((i.total_ex as number) ?? 0), 0).toFixed(2)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </Card>
   )
 }
 

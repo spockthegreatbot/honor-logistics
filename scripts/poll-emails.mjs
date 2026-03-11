@@ -745,13 +745,23 @@ async function run() {
     msgs.push(msg)
   }
 
-  // Filter unread
+  // Filter: UNSEEN normally; or all-since-date when RESCAN_SINCE env is set
+  const rescanSince = process.env.RESCAN_SINCE
   const unread = []
-  for await (const msg of client.fetch('1:*', { flags: true, uid: true, envelope: true })) {
-    if (!msg.flags.has('\\Seen')) unread.push(msg)
+  if (rescanSince) {
+    const sinceDate = new Date(rescanSince)
+    console.log(`🔄 RESCAN mode: all emails since ${rescanSince}`)
+    for await (const msg of client.fetch('1:*', { flags: true, uid: true, envelope: true })) {
+      const msgDate = msg.envelope?.date ? new Date(msg.envelope.date) : null
+      if (msgDate && msgDate >= sinceDate) unread.push(msg)
+    }
+  } else {
+    for await (const msg of client.fetch('1:*', { flags: true, uid: true, envelope: true })) {
+      if (!msg.flags.has('\\Seen')) unread.push(msg)
+    }
   }
 
-  console.log(`📨 ${unread.length} unread emails`)
+  console.log(`📨 ${unread.length} emails to process`)
   if (unread.length === 0) { await client.logout(); return }
 
   const uidsToMark = []
@@ -926,7 +936,7 @@ async function run() {
   }
 
   // Mark as read
-  if (uidsToMark.length > 0) {
+  if (uidsToMark.length > 0 && !process.env.RESCAN_SINCE) {
     await client.messageFlagsAdd(uidsToMark.join(','), ['\\Seen'])
     console.log(`\n✅ Marked ${uidsToMark.length} emails as read`)
   }
