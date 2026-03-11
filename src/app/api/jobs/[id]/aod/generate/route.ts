@@ -45,15 +45,20 @@ export async function POST(
     const clients = Array.isArray(raw.clients) ? (raw.clients[0] as { name: string } | undefined) ?? null : raw.clients as { name: string } | null
     const endCustomers = Array.isArray(raw.end_customers) ? (raw.end_customers[0] as { name: string; address: string | null } | undefined) ?? null : raw.end_customers as { name: string; address: string | null } | null
 
+    // Extract end-customer name: prefer end_customers table, then parse "Customer: X" from notes
+    const notesStr: string = raw.notes ?? ''
+    const customerFromNotes = notesStr.match(/^Customer:\s*(.+)$/m)?.[1]?.trim() ?? null
+    const resolvedCustomerName = endCustomers?.name ?? customerFromNotes ?? null
+
     const jobData = {
       jobNumber: job.job_number,
       clientName: clients?.name ?? null,
-      endCustomerName: endCustomers?.name ?? null,
+      endCustomerName: resolvedCustomerName,
       deliveryAddress: raw.address_to ?? endCustomers?.address ?? null,
       machineModel: raw.machine_model ?? null,
       serialNumber: raw.serial_number ?? null,
       scheduledDate: job.scheduled_date ?? null,
-      notes: job.notes ?? null,
+      notes: notesStr,
       efexAodUrl: raw.aod_pdf_url ?? null,
     }
 
