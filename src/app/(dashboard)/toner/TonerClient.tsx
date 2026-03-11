@@ -331,7 +331,7 @@ export default function TonerClient({ tonerJobs, initialOrders = [], clients }: 
             <h2 className="text-lg font-bold text-[#f1f5f9]">Legacy Toner Shipments</h2>
             <p className="text-sm text-[#94a3b8] mt-0.5">{filtered.length} orders</p>
           </div>
-        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
           <a
             href="/api/export/toner"
             download
@@ -579,6 +579,7 @@ export default function TonerClient({ tonerJobs, initialOrders = [], clients }: 
           </div>
         </SlideOver>
       </Dialog>
+      </div>{/* end legacy space-y-4 */}
     </div>
   )
 }

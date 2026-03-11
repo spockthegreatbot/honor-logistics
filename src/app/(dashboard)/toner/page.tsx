@@ -21,7 +21,7 @@ export default async function TonerPage() {
 
   return (
     <TonerClient
-      tonerJobs={(tonerJobs ?? []) as Parameters<typeof TonerClient>[0]['tonerJobs']}
+      tonerJobs={(tonerJobs ?? []) as unknown as Parameters<typeof TonerClient>[0]['tonerJobs']}
       clients={clients ?? []}
     />
   )
