@@ -10,7 +10,7 @@ export default async function TonerPage() {
       .select(`
         id, job_number, status, scheduled_date, created_at,
         address_to, machine_model, serial_number, contact_name,
-        order_types, notes,
+        order_types, notes, tracking_number,
         clients(id, name),
         end_customers(name)
       `)

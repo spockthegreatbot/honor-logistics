@@ -714,7 +714,7 @@ async function createAxusJob(axusData, pdfFilename, pdfBuffer, ediBuffer, ediFil
 
   const { data: newJob, error } = await supabase.from('jobs').insert({
     job_number: jobNumber, job_type: axusData.jobType || 'toner', order_types: [axusData.jobType || 'toner'],
-    status: 'new', client_id: axusClientId, end_customer_id: endCustomerId,
+    status: "dispatched", client_id: axusClientId, end_customer_id: endCustomerId,
     contact_name: axusData.shipToAttn || null, contact_phone: axusData.shipToPhone || null,
     scheduled_date: axusData.dateDue, address_to: axusData.shipToAddress || null,
     machine_model: axusData.machineModel || null, serial_number: axusData.serialNumber || null,

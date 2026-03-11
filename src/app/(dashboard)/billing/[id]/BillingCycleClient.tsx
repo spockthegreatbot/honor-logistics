@@ -186,7 +186,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
   const runupJobs = jobs.filter(j => j.job_type === 'runup')
   const deliveryJobs = jobs.filter(j => j.job_type === 'delivery' || j.job_type === 'collection')
   const installJobs = jobs.filter(j => j.job_type === 'install')
-  const tonerJobs = jobs.filter(j => j.job_type === 'toner_ship')
+  const tonerJobs = jobs.filter(j => j.job_type === 'toner_ship' || j.job_type === 'toner')
 
   async function runCalculate() {
     setCalculating(true)

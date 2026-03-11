@@ -35,9 +35,9 @@ interface TonerJob {
   machine_model: string | null
   serial_number: string | null
   contact_name: string | null
-  fault_description: string | null
   order_types: string[] | null
   notes: string | null
+  tracking_number?: string | null
   clients: { id: string; name: string } | null
   end_customers: { name: string } | null
 }
@@ -137,6 +137,32 @@ export default function TonerClient({ tonerJobs, initialOrders = [], clients }: 
   // Toner jobs filter
   const [jobClientFilter, setJobClientFilter] = useState('all')
   const [billingId, setBillingId] = useState<string | null>(null)
+
+  // Inline tracking state: jobId → { courier, tracking_number }
+  const [trackingEdit, setTrackingEdit] = useState<string | null>(null) // jobId being edited
+  const [trackingForm, setTrackingForm] = useState<{ courier: string; tracking_number: string }>({ courier: 'GO_Logistics', tracking_number: '' })
+  const [trackingData, setTrackingData] = useState<Record<string, { courier: string; tracking_number: string }>>(
+    Object.fromEntries(
+      tonerJobs
+        .filter((j): j is TonerJob & { tracking_number: string } => !!(j as { tracking_number?: string }).tracking_number)
+        .map(j => [j.id, { courier: (j as { courier?: string }).courier ?? 'GO_Logistics', tracking_number: (j as { tracking_number?: string }).tracking_number! }])
+    )
+  )
+
+  async function saveTracking(jobId: string) {
+    await fetch(`/api/jobs/${jobId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tracking_number: trackingForm.tracking_number }),
+    })
+    setTrackingData(d => ({ ...d, [jobId]: { ...trackingForm } }))
+    setTrackingEdit(null)
+  }
+
+  function getTrackingUrl(courier: string, tn: string): string | null {
+    const base = courierTracking[courier]
+    return base ? `${base}${tn}` : null
+  }
 
   const filteredJobs = tonerJobs.filter(j => {
     if (jobClientFilter === 'all') return true
@@ -271,15 +297,16 @@ export default function TonerClient({ tonerJobs, initialOrders = [], clients }: 
                     <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Description</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider hidden sm:table-cell">Serial</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Job #</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider hidden lg:table-cell">Tracking</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#2a2d3e]">
                   {filteredJobs.map(job => {
                     const clientName = (job.clients as { name: string } | null)?.name ?? '—'
                     const customerName = (job.end_customers as { name: string } | null)?.name ?? '—'
-                    const status = job.status ?? 'new'
                     const description = job.notes || job.machine_model || '—'
+                    const tracking = trackingData[job.id]
+                    const trackUrl = tracking ? getTrackingUrl(tracking.courier, tracking.tracking_number) : null
                     return (
                       <tr key={job.id} className="hover:bg-[#1a1d27] transition-colors">
                         <td className="px-4 py-3 text-xs text-[#94a3b8] whitespace-nowrap">{formatDate(job.scheduled_date ?? job.created_at)}</td>
@@ -290,10 +317,47 @@ export default function TonerClient({ tonerJobs, initialOrders = [], clients }: 
                         <td className="px-4 py-3 text-xs text-[#f1f5f9] max-w-[200px] truncate" title={description ?? undefined}>{description}</td>
                         <td className="px-4 py-3 font-mono text-xs text-[#94a3b8] hidden sm:table-cell">{job.serial_number ?? '—'}</td>
                         <td className="px-4 py-3 font-mono text-xs text-orange-400">{job.job_number ?? '—'}</td>
-                        <td className="px-4 py-3">
-                          <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', jobStatusStyles[status] ?? 'bg-[#2a2d3e] text-[#94a3b8]')}>
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
-                          </span>
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          {trackingEdit === job.id ? (
+                            <div className="flex items-center gap-1">
+                              <select
+                                value={trackingForm.courier}
+                                onChange={e => setTrackingForm(f => ({ ...f, courier: e.target.value }))}
+                                className="text-xs bg-[#0f1117] border border-[#2a2d3e] rounded px-1 py-0.5 text-[#f1f5f9]"
+                              >
+                                {Object.entries(courierLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                              </select>
+                              <input
+                                type="text"
+                                value={trackingForm.tracking_number}
+                                onChange={e => setTrackingForm(f => ({ ...f, tracking_number: e.target.value }))}
+                                placeholder="Tracking #"
+                                className="text-xs bg-[#0f1117] border border-[#2a2d3e] rounded px-2 py-0.5 text-[#f1f5f9] w-28 font-mono"
+                                onKeyDown={e => { if (e.key === 'Enter') saveTracking(job.id); if (e.key === 'Escape') setTrackingEdit(null) }}
+                                autoFocus
+                              />
+                              <button onClick={() => saveTracking(job.id)} className="text-xs text-green-400 hover:text-green-300 px-1">✓</button>
+                              <button onClick={() => setTrackingEdit(null)} className="text-xs text-[#94a3b8] hover:text-red-400 px-1">✕</button>
+                            </div>
+                          ) : tracking ? (
+                            <div className="flex items-center gap-1">
+                              {trackUrl ? (
+                                <a href={trackUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 font-mono flex items-center gap-1">
+                                  {tracking.tracking_number} <ExternalLink className="w-3 h-3" />
+                                </a>
+                              ) : (
+                                <span className="text-xs font-mono text-[#94a3b8]">{tracking.tracking_number}</span>
+                              )}
+                              <button onClick={() => { setTrackingForm(tracking); setTrackingEdit(job.id) }} className="text-[#555] hover:text-[#94a3b8] text-xs ml-1">✎</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setTrackingForm({ courier: 'GO_Logistics', tracking_number: '' }); setTrackingEdit(job.id) }}
+                              className="text-xs text-[#555] hover:text-orange-400 transition-colors"
+                            >
+                              + Add tracking
+                            </button>
+                          )}
                         </td>
                       </tr>
                     )

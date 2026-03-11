@@ -67,11 +67,13 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 
   if (!cycle) return NextResponse.json({ error: 'Cycle not found' }, { status: 404 })
 
+  // Toner jobs don't require status filter (auto-fulfilled, status stays 'new'/'dispatched')
+  // Other job types require complete/dispatched status before billing
   const { data: jobs } = await supabase
     .from('jobs')
     .select('*, clients(id, name), end_customers(id, name), machines(id, model), runup_details(*), delivery_details(*), install_details(*), toner_orders(*)')
     .eq('client_id', cycle.client_id)
-    .in('status', ['complete', 'dispatched'])
+    .or('job_type.eq.toner,status.in.(complete,dispatched)')
     .is('billing_cycle_id', null)
     .order('scheduled_date', { ascending: false })
 
