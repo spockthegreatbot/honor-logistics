@@ -28,7 +28,7 @@ export async function POST(
       .from('jobs')
       .select(`
         id, job_number, job_type, status, serial_number, scheduled_date,
-        notes, completed_at, assigned_to, address_to, machine_model,
+        notes, completed_at, assigned_to, address_to, machine_model, aod_pdf_url,
         clients(name),
         end_customers(name, address)
       `)
@@ -51,10 +51,10 @@ export async function POST(
       endCustomerName: endCustomers?.name ?? null,
       deliveryAddress: raw.address_to ?? endCustomers?.address ?? null,
       machineModel: raw.machine_model ?? null,
-      serialNumber: job.serial_number,
-      scheduledDate: job.scheduled_date,
-      notes: job.notes,
-      faultDescription: null,
+      serialNumber: raw.serial_number ?? null,
+      scheduledDate: job.scheduled_date ?? null,
+      notes: job.notes ?? null,
+      efexAodUrl: raw.aod_pdf_url ?? null,
     }
 
     // Generate PDF
