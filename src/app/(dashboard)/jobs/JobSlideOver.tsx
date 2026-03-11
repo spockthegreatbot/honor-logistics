@@ -500,21 +500,10 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                           {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">End Customer</p>
-                        <select
-                          value={endCustomerId}
-                          onChange={e => setEndCustomerId(e.target.value)}
-                          className="w-full h-8 rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] px-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                        >
-                          <option value="">— None —</option>
-                          {endCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                      </div>
-                      {(job.end_customers?.name ?? job.notes?.match(/Customer: ([^\n]+)/)?.[1]?.trim()) && (
+                      {(job.end_customers?.name ?? job.contact_name) && (
                         <div>
                           <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-1">Customer</p>
-                          <p className="text-sm text-[#f1f5f9] py-1">{job.end_customers?.name ?? job.notes?.match(/Customer: ([^\n]+)/)?.[1]?.trim()}</p>
+                          <p className="text-sm text-[#f1f5f9] py-1">{job.end_customers?.name ?? job.contact_name}</p>
                         </div>
                       )}
                     </div>
