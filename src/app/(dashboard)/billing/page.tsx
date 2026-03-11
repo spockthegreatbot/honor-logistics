@@ -77,12 +77,17 @@ export default async function BillingPage({ searchParams }: PageProps) {
             Each client has independent billing cycles — filter by client below.
           </p>
         </div>
-        <Button size="sm" asChild className="w-full sm:w-auto">
-          <Link href="/billing/new">
-            <Plus className="w-4 h-4" />
-            New Cycle
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <Link href="/billing/archive">System Archive</Link>
+          </Button>
+          <Button size="sm" asChild className="w-full sm:w-auto">
+            <Link href="/billing/new">
+              <Plus className="w-4 h-4" />
+              New Cycle
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Client Tab Bar */}

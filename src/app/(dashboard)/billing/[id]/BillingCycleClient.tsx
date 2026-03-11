@@ -190,6 +190,20 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
   const installJobs = jobs.filter(j => j.job_type === 'install')
   const tonerJobs = jobs.filter(j => j.job_type === 'toner_ship' || j.job_type === 'toner')
 
+  // Fetch billing_line_items for historical/imported cycles
+  const [lineItems, setLineItems] = React.useState<Record<string, unknown>[]>([])
+  React.useEffect(() => {
+    fetch(`/api/billing/${cycle.id}/line-items`)
+      .then(r => r.json())
+      .then(d => setLineItems(d.items ?? []))
+      .catch(() => {})
+  }, [cycle.id])
+
+  const liByType = (type: string | string[]) => {
+    const types = Array.isArray(type) ? type : [type]
+    return lineItems.filter(i => types.includes(i.sheet_type as string))
+  }
+
   async function runCalculate() {
     setCalculating(true)
     try {
@@ -458,31 +472,31 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                 <TabsTrigger value="runups">
                   <span className="flex items-center gap-1.5">
                     <Wrench className="w-3.5 h-3.5" />
-                    Run-Ups <span className="text-xs opacity-60">({runupJobs.length})</span>
+                    Run-Ups <span className="text-xs opacity-60">({runupJobs.length || liByType('runup').length})</span>
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="deliveries">
                   <span className="flex items-center gap-1.5">
                     <Truck className="w-3.5 h-3.5" />
-                    Deliveries <span className="text-xs opacity-60">({deliveryJobs.length})</span>
+                    Deliveries <span className="text-xs opacity-60">({deliveryJobs.length || liByType(['delivery','inwards_outwards']).length})</span>
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="installs">
                   <span className="flex items-center gap-1.5">
                     <Package className="w-3.5 h-3.5" />
-                    Installs <span className="text-xs opacity-60">({installJobs.length})</span>
+                    Installs <span className="text-xs opacity-60">({installJobs.length || liByType('install').length})</span>
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="storage">
                   <span className="flex items-center gap-1.5">
                     <Database className="w-3.5 h-3.5" />
-                    Storage <span className="text-xs opacity-60">({storageRows.length})</span>
+                    Storage <span className="text-xs opacity-60">({storageRows.length || liByType('storage').length})</span>
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="toner">
                   <span className="flex items-center gap-1.5">
                     <Printer className="w-3.5 h-3.5" />
-                    Toner <span className="text-xs opacity-60">({tonerJobs.length})</span>
+                    Toner <span className="text-xs opacity-60">({tonerJobs.length || liByType('toner').length})</span>
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="line_items">
@@ -540,7 +554,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                     </table>
                   </div>
                 ) : (
-                  <EmptyJobsState type="Run-Up" onAdd={openAddJobs} editable={isEditable} />
+                  <LineItemRows items={liByType('runup')} emptyLabel="Run-Up" onAdd={openAddJobs} editable={isEditable} />
                 )}
               </Card>
             </TabsContent>
@@ -593,7 +607,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                     </table>
                   </div>
                 ) : (
-                  <EmptyJobsState type="Delivery" onAdd={openAddJobs} editable={isEditable} />
+                  <LineItemRows items={liByType(['delivery', 'inwards_outwards'])} emptyLabel="Delivery" onAdd={openAddJobs} editable={isEditable} />
                 )}
               </Card>
             </TabsContent>
@@ -635,7 +649,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                     </table>
                   </div>
                 ) : (
-                  <EmptyJobsState type="Install" onAdd={openAddJobs} editable={isEditable} />
+                  <LineItemRows items={liByType('install')} emptyLabel="Install" onAdd={openAddJobs} editable={isEditable} />
                 )}
               </Card>
             </TabsContent>
@@ -695,9 +709,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                     </table>
                   </div>
                 ) : (
-                  <div className="py-10 text-center text-[#94a3b8] text-sm">
-                    No storage lines yet.{isEditable && ' Click "Add Line" to add weekly storage.'}
-                  </div>
+                  <LineItemRows items={liByType('storage')} emptyLabel="Storage" onAdd={openAddJobs} editable={isEditable} emptyMsg='No storage lines yet. Click "Add Line" to add weekly storage.' />
                 )}
               </Card>
             </TabsContent>
@@ -743,7 +755,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                     </table>
                   </div>
                 ) : (
-                  <EmptyJobsState type="Toner" onAdd={openAddJobs} editable={isEditable} />
+                  <LineItemRows items={liByType('toner')} emptyLabel="Toner" onAdd={openAddJobs} editable={isEditable} />
                 )}
               </Card>
             </TabsContent>
@@ -1056,10 +1068,63 @@ function LineItemsTab({ cycleId, jobs: linkedJobs }: { cycleId: string; jobs: Jo
   )
 }
 
-function EmptyJobsState({ type, onAdd, editable }: { type: string; onAdd: () => void; editable: boolean }) {
+function LineItemRows({
+  items, emptyLabel, emptyMsg, onAdd, editable
+}: {
+  items: Record<string, unknown>[]
+  emptyLabel: string
+  emptyMsg?: string
+  onAdd: () => void
+  editable: boolean
+}) {
+  if (!items.length) {
+    return <EmptyJobsState type={emptyLabel} onAdd={onAdd} editable={editable} emptyMsg={emptyMsg} />
+  }
+  const total = items.reduce((s, i) => s + ((i.total_ex as number) ?? 0), 0)
+  return (
+    <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-[#0f1117]">
+          <tr className="border-b border-[#2a2d3e]">
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#94a3b8] uppercase">Date</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#94a3b8] uppercase">Customer</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#94a3b8] uppercase">Description</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#94a3b8] uppercase hidden md:table-cell">Serial / Ref</th>
+            <th className="px-4 py-2 text-right text-xs font-medium text-[#94a3b8] uppercase">Qty</th>
+            <th className="px-4 py-2 text-right text-xs font-medium text-[#94a3b8] uppercase">Price</th>
+            <th className="px-4 py-2 text-right text-xs font-medium text-[#94a3b8] uppercase">Total</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#2a2d3e]">
+          {items.map((item) => (
+            <tr key={item.id as string} className="hover:bg-[#1a1d27]">
+              <td className="px-4 py-2 text-xs text-[#94a3b8]">
+                {item.job_date ? new Date((item.job_date as string) + 'T12:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : '—'}
+              </td>
+              <td className="px-4 py-2 text-xs text-[#f1f5f9] max-w-[140px] truncate">{(item.customer as string) || '—'}</td>
+              <td className="px-4 py-2 text-xs text-[#94a3b8] max-w-[200px] truncate">{(item.action as string) || (item.model as string) || '—'}</td>
+              <td className="px-4 py-2 text-xs text-[#64748b] hidden md:table-cell">{(item.serial as string) || (item.efex_ni as string) || '—'}</td>
+              <td className="px-4 py-2 text-right text-xs text-[#94a3b8]">{item.qty as number ?? '—'}</td>
+              <td className="px-4 py-2 text-right text-xs font-mono text-[#94a3b8]">{item.price_ex != null ? `$${(item.price_ex as number).toFixed(2)}` : '—'}</td>
+              <td className="px-4 py-2 text-right font-mono text-sm text-[#f1f5f9]">{item.total_ex != null ? `$${(item.total_ex as number).toFixed(2)}` : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-[#2a2d3e] bg-[#1a1d27]">
+            <td colSpan={6} className="px-4 py-2 text-xs text-[#94a3b8] font-medium">Total ({items.length} items)</td>
+            <td className="px-4 py-2 text-right font-semibold text-orange-400 font-mono">${total.toFixed(2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
+function EmptyJobsState({ type, onAdd, editable, emptyMsg }: { type: string; onAdd: () => void; editable: boolean; emptyMsg?: string }) {
   return (
     <div className="py-10 flex flex-col items-center text-center gap-2">
-      <p className="text-sm text-[#94a3b8]">No {type} jobs in this cycle.</p>
+      <p className="text-sm text-[#94a3b8]">{emptyMsg ?? `No ${type} jobs in this cycle.`}</p>
       {editable && (
         <Button size="sm" variant="outline" onClick={onAdd}>
           <Plus className="w-3.5 h-3.5" />
