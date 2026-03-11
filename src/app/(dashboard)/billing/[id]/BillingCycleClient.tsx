@@ -964,7 +964,7 @@ const SHEET_LABELS: Record<string, string> = {
   toner: 'Toner', storage: 'Storage', inwards_outwards: 'Inwards & Outwards'
 }
 
-function LineItemsTab({ cycleId, jobs: linkedJobs }: { cycleId: string; jobs: Job[] }) {
+function LineItemsTab({ cycleId, jobs: linkedJobs }: { cycleId: string; jobs: JobRecord[] }) {
   const [items, setItems] = React.useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = React.useState(true)
   const [filter, setFilter] = React.useState('all')
