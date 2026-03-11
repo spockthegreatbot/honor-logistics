@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, CheckCircle2, AlertCircle, Loader2, PenLine, Download, Send, Printer, FileText } from 'lucide-react'
+import { X, CheckCircle2, AlertCircle, Loader2, PenLine, Download, Send, Printer, FileText, RotateCcw } from 'lucide-react'
 import { SignaturePad } from '@/components/aod/SignaturePad'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -756,14 +756,32 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                   </Button>
                 ) : (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
-                      <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
-                      <div>
-                        <p className="text-sm text-green-400 font-medium">Signed ✅</p>
-                        {job.signed_aod_at && (
-                          <p className="text-xs text-[#94a3b8]">{new Date(job.signed_aod_at).toLocaleString('en-AU')}</p>
-                        )}
+                    <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                        <div>
+                          <p className="text-sm text-green-400 font-medium">Signed ✅</p>
+                          {job.signed_aod_at && (
+                            <p className="text-xs text-[#94a3b8]">{new Date(job.signed_aod_at).toLocaleString('en-AU')}</p>
+                          )}
+                        </div>
                       </div>
+                      <button
+                        className="text-xs text-[#94a3b8] hover:text-red-400 transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-red-500/10"
+                        title="Reset signature"
+                        onClick={async () => {
+                          if (!job?.id) return
+                          await fetch(`/api/jobs/${job.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ signed_aod_url: null, signed_aod_at: null }),
+                          })
+                          setJob(j => j ? { ...j, signed_aod_url: null, signed_aod_at: null } : j)
+                          setAodMessage(null)
+                        }}
+                      >
+                        <RotateCcw className="w-3 h-3" />Reset
+                      </button>
                     </div>
                     <a href={job.signed_aod_url} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm" className="w-full flex items-center gap-2">

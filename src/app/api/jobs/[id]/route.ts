@@ -20,6 +20,8 @@ const JOB_PATCH_FIELDS = [
   'serial_number', 'job_type', 'machine_model',
   // Job board fields
   'archived', 'runup_completed', 'board_column',
+  // AOD signature
+  'signed_aod_url', 'signed_aod_at',
 ]
 
 export async function PATCH(
