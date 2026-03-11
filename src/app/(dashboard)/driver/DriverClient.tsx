@@ -66,25 +66,34 @@ export default function DriverClient({ initialJobs, today }: Props) {
   const [filter, setFilter] = useState<Filter>('today')
   const [updating, setUpdating] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [viewDate, setViewDate] = useState<string>(today) // date being browsed
 
   // Photo modal
   const [photoJobId, setPhotoJobId] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Date label for header
-  const dateLabel = new Date(today + 'T12:00:00').toLocaleDateString('en-AU', {
+  // Date navigation helpers
+  function shiftDate(days: number) {
+    const d = new Date(viewDate + 'T12:00:00')
+    d.setDate(d.getDate() + days)
+    setViewDate(d.toLocaleDateString('en-CA'))
+    setFilter('today') // switch to day view when navigating
+  }
+
+  const dateLabel = new Date(viewDate + 'T12:00:00').toLocaleDateString('en-AU', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
   })
+  const isToday = viewDate === today
 
   const displayed =
     filter === 'today'
-      ? jobs.filter((j) => j.scheduled_date === today)
+      ? jobs.filter((j) => j.scheduled_date === viewDate)
       : jobs.filter((j) => ACTIVE_STATUSES.has(j.status ?? ''))
 
-  const todayCount = jobs.filter((j) => j.scheduled_date === today).length
+  const todayCount = jobs.filter((j) => j.scheduled_date === viewDate).length
 
   async function patchJob(id: string, body: Record<string, unknown>) {
     setUpdating(id)
@@ -148,10 +157,19 @@ export default function DriverClient({ initialJobs, today }: Props) {
         <div className="flex items-center justify-between max-w-lg mx-auto">
           <div>
             <h1 className="text-lg font-bold text-[#f1f5f9]">♜ Honor Jobs</h1>
-            <p className="text-sm text-[#64748b] mt-0.5">
+            {/* Date navigator */}
+            <div className="flex items-center gap-2 mt-1">
+              <button onClick={() => shiftDate(-1)} className="text-[#94a3b8] hover:text-[#f1f5f9] px-1 text-base">‹</button>
+              <span className="text-sm text-[#f1f5f9] font-medium min-w-[110px] text-center">{dateLabel}{isToday ? ' · Today' : ''}</span>
+              <button onClick={() => shiftDate(1)} className="text-[#94a3b8] hover:text-[#f1f5f9] px-1 text-base">›</button>
+              {!isToday && (
+                <button onClick={() => { setViewDate(today); setFilter('today') }} className="text-xs text-orange-400 hover:text-orange-300 ml-1">↩ Today</button>
+              )}
+            </div>
+            <p className="text-xs text-[#64748b] mt-0.5">
               {filter === 'today'
-                ? `${todayCount} job${todayCount !== 1 ? 's' : ''} · ${dateLabel}`
-                : `${displayed.length} active job${displayed.length !== 1 ? 's' : ''}`}
+                ? `${displayed.length} job${displayed.length !== 1 ? 's' : ''}`
+                : `${displayed.length} active`}
             </p>
           </div>
 

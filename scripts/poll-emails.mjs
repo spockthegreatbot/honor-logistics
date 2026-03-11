@@ -484,25 +484,28 @@ async function uploadToSupabase(folder, filename, buffer, contentType) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SKIP_DOMAINS = ['xero.com', 'post.xero.com', 'myob.com', 'quickbooks.com', 'stripe.com', 'dominos.com.au']
-const TRIGGER_DOMAINS = ['efex.com.au'] // emails from these domains are always processed as EFEX job requests
+const EFEX_JOB_DOMAINS = ['efex.com.au']
 const SPAM_INDICATORS = ['***SPAM***', 'unsubscribe', 'SEO report', '4K', 'channels', 'website design']
 
-function isEfexJobRequest(subject, body, fromEmail) {
-  // Skip known non-job senders
+// EFEX job emails always match: "Efex / [Customer] [TYPE] - [DD-MM-YYYY]"
+// or "RE: Efex / ..." (replies). Only accept this exact pattern — no domain-wide catch-all.
+const EFEX_SUBJECT_RE = /^(re:\s*)?(fwd?:\s*)?efex\s*\/\s*.+?(delivery|install|collection|pickup|pick[-\s]?up|relocation|toner|consumable)/i
+
+function isEfexJobRequest(subject, body, fromEmail, hasDocx = false) {
+  // Must be from @efex.com.au domain
   const domain = (fromEmail || '').split('@')[1]?.toLowerCase() ?? ''
-  if (SKIP_DOMAINS.some(d => domain.includes(d))) return false
+  const isEfexDomain = EFEX_JOB_DOMAINS.some(d => domain === d || domain.endsWith('.' + d))
+  if (!isEfexDomain) return false
+
+  // Skip spam indicators
   if (SPAM_INDICATORS.some(s => subject.includes(s))) return false
 
-  // Domain-level trigger: any email from a TRIGGER_DOMAIN is always an EFEX job request
-  if (TRIGGER_DOMAINS.some(d => domain === d || domain.endsWith('.' + d))) return true
+  // If it has a DOCX booking form attachment → definitely a job request
+  if (hasDocx) return true
 
-  const combined = (subject + ' ' + body).toLowerCase()
-  return (
-    combined.includes('delivery') || combined.includes('install') ||
-    combined.includes('pick-up') || combined.includes('collection') ||
-    combined.includes('relocation') || combined.includes('booking') ||
-    combined.includes('efex')
-  ) && !combined.includes('acknowledgment') && !combined.includes('invoice')
+  // Otherwise require the subject to match the EFEX job pattern exactly
+  // This prevents newsletters, promotions, and other @efex.com.au emails from becoming jobs
+  return EFEX_SUBJECT_RE.test(subject.trim())
 }
 
 function isMitronicsJobRequest(subject, body, fromEmail) {
@@ -882,13 +885,21 @@ async function run() {
 
     if (aodAttach) {
       console.log(`  📎 AOD PDF: ${aodAttach.filename}`)
-      if (isEfexJobRequest(subject, body, from) || docxFields) {
-        console.log(`  🆕 Also a job request — creating job`)
-        await createJobFromEmail(body, subject, docxFields)
+      if (isEfexJobRequest(subject, body, from, !!docxAttach) || docxFields) {
+        console.log(`  🆕 Also a job request — creating job + saving AOD PDF`)
+        const jobResult = await createJobFromEmail(body, subject, docxFields)
+        // Upload the AOD PDF and attach to the job
+        if (jobResult?.id) {
+          const aodUrl = await uploadToSupabase('aod-documents/efex-aod', aodAttach.filename, aodAttach.content, 'application/pdf')
+          if (aodUrl) {
+            await supabase.from('jobs').update({ aod_pdf_url: aodUrl, has_aod: true }).eq('id', jobResult.id)
+            console.log(`  ✅ AOD PDF saved to job ${jobResult.job_number}`)
+          }
+        }
       }
     }
 
-    if (!aodAttach && (isEfexJobRequest(subject, body, from) || docxFields)) {
+    if (!aodAttach && (isEfexJobRequest(subject, body, from, !!docxAttach) || docxFields)) {
       console.log(`  🆕 EFEX job request detected`)
       const result = await createJobFromEmail(body, subject, docxFields)
 
