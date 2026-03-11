@@ -748,9 +748,9 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
               </Card>
             </TabsContent>
 
-            {/* All Line Items Tab — from billing_line_items (imported Excel data) */}
+            {/* All Line Items Tab — from billing_line_items (imported) or jobs (live cycles) */}
             <TabsContent value="line_items">
-              <LineItemsTab cycleId={cycle.id} />
+              <LineItemsTab cycleId={cycle.id} jobs={jobs} />
             </TabsContent>
           </Tabs>
         </div>
@@ -964,7 +964,7 @@ const SHEET_LABELS: Record<string, string> = {
   toner: 'Toner', storage: 'Storage', inwards_outwards: 'Inwards & Outwards'
 }
 
-function LineItemsTab({ cycleId }: { cycleId: string }) {
+function LineItemsTab({ cycleId, jobs: linkedJobs }: { cycleId: string; jobs: Job[] }) {
   const [items, setItems] = React.useState<Record<string, unknown>[]>([])
   const [loading, setLoading] = React.useState(true)
   const [filter, setFilter] = React.useState('all')
@@ -972,7 +972,27 @@ function LineItemsTab({ cycleId }: { cycleId: string }) {
   React.useEffect(() => {
     fetch(`/api/billing/${cycleId}/line-items`)
       .then(r => r.json())
-      .then(d => { setItems(d.items ?? []); setLoading(false) })
+      .then(d => {
+        if (d.items?.length) {
+          setItems(d.items)
+        } else {
+          // Fallback: build from linked jobs
+          const fallback = linkedJobs.map(j => ({
+            id: j.id,
+            sheet_type: j.job_type,
+            job_date: j.scheduled_date,
+            customer: j.end_customers?.name ?? '',
+            model: j.machine_model ?? '',
+            serial: j.serial_number ?? '',
+            action: (Array.isArray(j.order_types) ? j.order_types.join(', ') : j.job_type) ?? j.job_type,
+            qty: 1,
+            price_ex: null,
+            total_ex: null,
+          })) as Record<string, unknown>[]
+          setItems(fallback)
+        }
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [cycleId])
 
@@ -980,7 +1000,7 @@ function LineItemsTab({ cycleId }: { cycleId: string }) {
   const displayed = filter === 'all' ? items : items.filter((i: Record<string, unknown>) => i.sheet_type === filter)
 
   if (loading) return <Card className="p-6 text-center text-sm text-[#94a3b8]">Loading line items…</Card>
-  if (!items.length) return <Card className="p-6 text-center text-sm text-[#94a3b8]">No line items imported for this cycle.</Card>
+  if (!items.length) return <Card className="p-6 text-center text-sm text-[#94a3b8]">No line items for this cycle.</Card>
 
   return (
     <Card>
