@@ -272,7 +272,6 @@ export default function TonerClient({ tonerJobs, initialOrders = [], clients }: 
                     <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider hidden sm:table-cell">Serial</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Job #</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#2a2d3e]">
@@ -280,7 +279,7 @@ export default function TonerClient({ tonerJobs, initialOrders = [], clients }: 
                     const clientName = (job.clients as { name: string } | null)?.name ?? '—'
                     const customerName = (job.end_customers as { name: string } | null)?.name ?? '—'
                     const status = job.status ?? 'new'
-                    const description = job.fault_description || job.notes || job.machine_model || '—'
+                    const description = job.notes || job.machine_model || '—'
                     return (
                       <tr key={job.id} className="hover:bg-[#1a1d27] transition-colors">
                         <td className="px-4 py-3 text-xs text-[#94a3b8] whitespace-nowrap">{formatDate(job.scheduled_date ?? job.created_at)}</td>
@@ -295,19 +294,6 @@ export default function TonerClient({ tonerJobs, initialOrders = [], clients }: 
                           <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', jobStatusStyles[status] ?? 'bg-[#2a2d3e] text-[#94a3b8]')}>
                             {status.charAt(0).toUpperCase() + status.slice(1)}
                           </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {status !== 'invoiced' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-7"
-                              disabled={billingId === job.id}
-                              onClick={() => markBilled(job.id)}
-                            >
-                              {billingId === job.id ? 'Saving…' : 'Mark Billed'}
-                            </Button>
-                          )}
                         </td>
                       </tr>
                     )
