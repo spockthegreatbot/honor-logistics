@@ -490,13 +490,13 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                 <TabsTrigger value="storage">
                   <span className="flex items-center gap-1.5">
                     <Database className="w-3.5 h-3.5" />
-                    Storage <span className="text-xs opacity-60">({storageRows.length || liByType('storage').length})</span>
+                    Storage <span className="text-xs opacity-60">({storageRows.length || liByType('storage').length || (cycle.total_storage ? 1 : 0)})</span>
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="toner">
                   <span className="flex items-center gap-1.5">
                     <Printer className="w-3.5 h-3.5" />
-                    Toner <span className="text-xs opacity-60">({tonerJobs.length || liByType('toner').length})</span>
+                    Toner <span className="text-xs opacity-60">({tonerJobs.length || liByType('toner').length || (cycle.total_toner ? 1 : 0)})</span>
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="line_items">
@@ -709,7 +709,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                     </table>
                   </div>
                 ) : (
-                  <LineItemRows items={liByType('storage')} emptyLabel="Storage" onAdd={openAddJobs} editable={isEditable} emptyMsg='No storage lines yet. Click "Add Line" to add weekly storage.' />
+                  <LineItemRows items={liByType('storage')} emptyLabel="Storage" onAdd={openAddJobs} editable={isEditable} emptyMsg='No storage lines yet. Click "Add Line" to add weekly storage.' invoiceTotal={cycle.total_storage ?? undefined} invoiceLabel="Storage + Misc" />
                 )}
               </Card>
             </TabsContent>
@@ -755,7 +755,7 @@ export default function BillingCycleClient({ cycle, jobs, storageWeekly, pricing
                     </table>
                   </div>
                 ) : (
-                  <LineItemRows items={liByType('toner')} emptyLabel="Toner" onAdd={openAddJobs} editable={isEditable} />
+                  <LineItemRows items={liByType('toner')} emptyLabel="Toner" onAdd={openAddJobs} editable={isEditable} invoiceTotal={cycle.total_toner ?? undefined} invoiceLabel="Toner" />
                 )}
               </Card>
             </TabsContent>
@@ -1069,14 +1069,43 @@ function LineItemsTab({ cycleId, jobs: linkedJobs }: { cycleId: string; jobs: Jo
 }
 
 function LineItemRows({
-  items, emptyLabel, emptyMsg, onAdd, editable
+  items, emptyLabel, emptyMsg, onAdd, editable, invoiceTotal, invoiceLabel
 }: {
   items: Record<string, unknown>[]
   emptyLabel: string
   emptyMsg?: string
   onAdd: () => void
   editable: boolean
+  invoiceTotal?: number
+  invoiceLabel?: string
 }) {
+  // When no line items but we have an invoice total — show a single aggregate row
+  if (!items.length && invoiceTotal && invoiceTotal > 0) {
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[#2a2d3e]">
+              <th className="px-4 py-2 text-left text-xs font-medium text-[#94a3b8] uppercase">Description</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-[#94a3b8] uppercase">Total (from invoice)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-[#2a2d3e]">
+              <td className="px-4 py-3 text-sm text-[#94a3b8]">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400">Invoice Total</span>
+                  <span>{invoiceLabel ?? emptyLabel} — imported from invoice PDF</span>
+                </div>
+                <p className="text-xs text-[#64748b] mt-0.5">Line-item detail not available for this period. Total is correct per invoice.</p>
+              </td>
+              <td className="px-4 py-3 text-right font-mono font-bold text-orange-400">${invoiceTotal.toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )
+  }
   if (!items.length) {
     return <EmptyJobsState type={emptyLabel} onAdd={onAdd} editable={editable} emptyMsg={emptyMsg} />
   }
