@@ -62,7 +62,8 @@ const COLUMNS: { id: BoardColumn; label: string; accent: string; headerColor: st
 
 // ─── Column mapping from job_type / order_types ──────────────────────────────
 
-function deriveColumn(job: Job): string {
+function deriveColumn(job: Job): string | null {
+  if (job.job_type === 'toner') return null // toner jobs are off the board
   if (job.archived) return 'archived'
   if (job.board_column) return job.board_column
 

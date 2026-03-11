@@ -14,6 +14,7 @@ async function JobsPageInner() {
       '*, clients(name, color_code), end_customers(name, address), staff:assigned_to(name), runup_details(check_signed_off)',
       { count: 'exact' }
     )
+    .neq('job_type', 'toner')
     .order('created_at', { ascending: false })
     .range(0, 999)
 

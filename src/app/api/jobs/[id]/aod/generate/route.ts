@@ -28,7 +28,7 @@ export async function POST(
       .from('jobs')
       .select(`
         id, job_number, job_type, status, serial_number, scheduled_date,
-        notes, completed_at, assigned_to, address_to, machine_model,
+        notes, completed_at, assigned_to, address_to, machine_model, fault_description,
         clients(name),
         end_customers(name, address)
       `)
@@ -47,17 +47,14 @@ export async function POST(
 
     const jobData = {
       jobNumber: job.job_number,
-      jobType: job.job_type,
       clientName: clients?.name ?? null,
       endCustomerName: endCustomers?.name ?? null,
       deliveryAddress: raw.address_to ?? endCustomers?.address ?? null,
-      machineMake: null,
       machineModel: raw.machine_model ?? null,
       serialNumber: job.serial_number,
-      staffName: null,
-      completedAt: job.completed_at ?? null,
       scheduledDate: job.scheduled_date,
       notes: job.notes,
+      faultDescription: raw.fault_description ?? null,
     }
 
     // Generate PDF

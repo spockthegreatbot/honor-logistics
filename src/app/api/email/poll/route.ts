@@ -372,8 +372,8 @@ export async function POST(req: NextRequest) {
 
         const { data: newJob, error: jobErr } = await supabase.from('jobs').insert({
           job_number: jobNumber,
-          job_type: axusData.jobType,
-          order_types: [axusData.jobType],
+          job_type: axusData.jobType || 'toner',
+          order_types: [axusData.jobType || 'toner'],
           status: 'new',
           client_id: axusClientId,
           end_customer_id: endCustomerId,

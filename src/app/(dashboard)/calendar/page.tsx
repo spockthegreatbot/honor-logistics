@@ -14,6 +14,7 @@ export default async function CalendarPage() {
     .not('scheduled_date', 'is', null)
     .neq('archived', true)
     .not('status', 'in', '(cancelled)')
+    .neq('job_type', 'toner')
     .order('scheduled_date', { ascending: true })
 
   return <CalendarClient jobs={(jobs as never[]) ?? []} />

@@ -25,6 +25,23 @@ import { cn, formatDate, formatCurrency } from '@/lib/utils'
 
 interface Client { id: string; name: string }
 
+interface TonerJob {
+  id: string
+  job_number: string | null
+  status: string | null
+  scheduled_date: string | null
+  created_at: string | null
+  address_to: string | null
+  machine_model: string | null
+  serial_number: string | null
+  contact_name: string | null
+  fault_description: string | null
+  order_types: string[] | null
+  notes: string | null
+  clients: { id: string; name: string } | null
+  end_customers: { name: string } | null
+}
+
 interface TonerItem {
   sku: string
   description: string
@@ -81,13 +98,14 @@ const statusLabels: Record<string, string> = {
 }
 
 interface Props {
-  initialOrders: TonerOrder[]
+  tonerJobs: TonerJob[]
+  initialOrders?: TonerOrder[]
   clients: Client[]
 }
 
 const emptyItem = (): TonerItem => ({ sku: '', description: '', qty: 1, unit_price: 0 })
 
-export default function TonerClient({ initialOrders, clients }: Props) {
+export default function TonerClient({ tonerJobs, initialOrders = [], clients }: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
 
@@ -113,8 +131,34 @@ export default function TonerClient({ initialOrders, clients }: Props) {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
-  // Status update
+  // Status update (toner_orders table)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+
+  // Toner jobs filter
+  const [jobClientFilter, setJobClientFilter] = useState('all')
+  const [billingId, setBillingId] = useState<string | null>(null)
+
+  const filteredJobs = tonerJobs.filter(j => {
+    if (jobClientFilter === 'all') return true
+    const clientName = (j.clients as { name: string } | null)?.name ?? ''
+    if (jobClientFilter === 'AXUS') return clientName.toLowerCase().includes('axus')
+    if (jobClientFilter === 'EFEX') return clientName.toLowerCase().includes('efex')
+    return true
+  })
+
+  async function markBilled(id: string) {
+    setBillingId(id)
+    try {
+      await fetch(`/api/jobs/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'invoiced' }),
+      })
+      startTransition(() => router.refresh())
+    } finally {
+      setBillingId(null)
+    }
+  }
 
   const filtered = initialOrders.filter(o => {
     if (courierFilter !== 'all' && o.courier !== courierFilter) return false
@@ -177,13 +221,116 @@ export default function TonerClient({ initialOrders, clients }: Props) {
     return base ? `${base}${order.tracking_number}` : null
   }
 
+  const jobStatusStyles: Record<string, string> = {
+    new:        'bg-[#2a2d3e] text-[#94a3b8]',
+    ready:      'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+    dispatched: 'bg-orange-500/15 text-orange-400 border border-orange-500/30',
+    complete:   'bg-green-500/15 text-green-400 border border-green-500/30',
+    invoiced:   'bg-purple-500/15 text-purple-400 border border-purple-500/30',
+  }
+
   return (
-    <div className="p-4 sm:p-6 space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#f1f5f9]">Toner Orders</h1>
-          <p className="text-sm text-[#94a3b8] mt-0.5">{filtered.length} orders</p>
+    <div className="p-4 sm:p-6 space-y-8">
+
+      {/* ── Toner Jobs (from jobs table) ──────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-[#f1f5f9]">Toner Orders</h1>
+            <p className="text-sm text-[#94a3b8] mt-0.5">{filteredJobs.length} jobs</p>
+          </div>
         </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-2">
+          {(['all', 'AXUS', 'EFEX'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setJobClientFilter(tab)}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                jobClientFilter === tab
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-[#1e2130] text-[#94a3b8] hover:text-[#f1f5f9] border border-[#2a2d3e]'
+              )}
+            >
+              {tab === 'all' ? 'All' : tab}
+            </button>
+          ))}
+        </div>
+
+        <Card>
+          {filteredJobs.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#2a2d3e]">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Client</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider hidden md:table-cell">Customer</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Description</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider hidden sm:table-cell">Serial</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Job #</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-[#94a3b8] uppercase tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#2a2d3e]">
+                  {filteredJobs.map(job => {
+                    const clientName = (job.clients as { name: string } | null)?.name ?? '—'
+                    const customerName = (job.end_customers as { name: string } | null)?.name ?? '—'
+                    const status = job.status ?? 'new'
+                    const description = job.fault_description || job.notes || job.machine_model || '—'
+                    return (
+                      <tr key={job.id} className="hover:bg-[#1a1d27] transition-colors">
+                        <td className="px-4 py-3 text-xs text-[#94a3b8] whitespace-nowrap">{formatDate(job.scheduled_date ?? job.created_at)}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-[#2a2d3e] text-[#94a3b8]">{clientName}</span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-[#94a3b8] hidden md:table-cell">{customerName}</td>
+                        <td className="px-4 py-3 text-xs text-[#f1f5f9] max-w-[200px] truncate" title={description ?? undefined}>{description}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-[#94a3b8] hidden sm:table-cell">{job.serial_number ?? '—'}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-orange-400">{job.job_number ?? '—'}</td>
+                        <td className="px-4 py-3">
+                          <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', jobStatusStyles[status] ?? 'bg-[#2a2d3e] text-[#94a3b8]')}>
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {status !== 'invoiced' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7"
+                              disabled={billingId === job.id}
+                              onClick={() => markBilled(job.id)}
+                            >
+                              {billingId === job.id ? 'Saving…' : 'Mark Billed'}
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="py-10 flex flex-col items-center text-center gap-3">
+              <Printer className="w-10 h-10 text-[#2a2d3e]" strokeWidth={1.5} />
+              <p className="text-sm text-[#94a3b8]">No toner jobs found.</p>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* ── Legacy Toner Orders (toner_orders table) ─────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-[#f1f5f9]">Legacy Toner Shipments</h2>
+            <p className="text-sm text-[#94a3b8] mt-0.5">{filtered.length} orders</p>
+          </div>
         <div className="flex items-center gap-2">
           <a
             href="/api/export/toner"

@@ -176,10 +176,10 @@ export async function parseAxusJobPdf(buffer: Buffer): Promise<AxusJobData> {
 
 function mapJobType(raw: string): string {
   const lower = raw.toLowerCase()
-  if (lower.includes('consumable') || lower.includes('toner') || lower.includes('supply') || lower.includes('service')) return 'delivery'
+  if (lower.includes('consumable') || lower.includes('toner') || lower.includes('supply') || lower.includes('service')) return 'toner'
   if (lower.includes('install')) return 'install'
   if (lower.includes('collect') || lower.includes('pickup') || lower.includes('pick-up')) return 'pickup'
-  return 'delivery'
+  return 'toner'
 }
 
 /** Extract the text between two section headers */
