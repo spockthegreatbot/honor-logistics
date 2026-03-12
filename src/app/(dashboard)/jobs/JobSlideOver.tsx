@@ -664,6 +664,136 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                 )}
               </div>
 
+              {/* Packing List / Shipment Details — for run-up jobs with parsed PDF data */}
+              {isRunup && job?.special_instructions && (() => {
+                try {
+                  const pl = JSON.parse(job.special_instructions)
+                  if (!pl?.lineItems) return null
+                  const machines = pl.lineItems.filter((i: any) => /ECOSYS|TASKalfa|LASER|PRINT|COLOUR.*DIGITAL/i.test(i.description))
+                  const accessories = pl.lineItems.filter((i: any) => !/ECOSYS|TASKalfa|LASER|PRINT|COLOUR.*DIGITAL/i.test(i.description))
+                  return (
+                    <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130] space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-[#f1f5f9]">📦 Packing List</p>
+                        {job.install_pdf_url && (
+                          <a
+                            href={job.install_pdf_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            View PDF
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Shipment metadata */}
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {pl.shipmentId && (
+                          <div>
+                            <span className="text-[#94a3b8]">Shipment ID:</span>
+                            <span className="ml-1 text-[#f1f5f9]">{pl.shipmentId}</span>
+                          </div>
+                        )}
+                        {pl.customerPO && (
+                          <div>
+                            <span className="text-[#94a3b8]">PO:</span>
+                            <span className="ml-1 text-[#f1f5f9]">{pl.customerPO}</span>
+                          </div>
+                        )}
+                        {pl.shipDate && (
+                          <div>
+                            <span className="text-[#94a3b8]">Ship Date:</span>
+                            <span className="ml-1 text-[#f1f5f9]">{pl.shipDate}</span>
+                          </div>
+                        )}
+                        {pl.connote && (
+                          <div>
+                            <span className="text-[#94a3b8]">Connote:</span>
+                            <span className="ml-1 text-[#f1f5f9]">{pl.connote}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Machines */}
+                      {machines.length > 0 && (
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-2">🖨 Equipment</p>
+                          <div className="space-y-2">
+                            {machines.map((item: any, idx: number) => (
+                              <div key={idx} className="bg-[#0f1117] rounded-lg p-3 border border-[#2a2d3e]">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <p className="text-sm font-medium text-[#f1f5f9]">{item.description}</p>
+                                    <p className="text-xs text-[#94a3b8] mt-0.5">Code: {item.itemCode}</p>
+                                  </div>
+                                  <span className="text-xs bg-[#2a2d3e] text-[#94a3b8] px-2 py-0.5 rounded-full shrink-0">
+                                    Qty: {item.shippedQty ?? item.orderedQty}
+                                  </span>
+                                </div>
+                                {item.serialNumbers?.length > 0 && (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {item.serialNumbers.map((sn: string, snIdx: number) => (
+                                      <span key={snIdx} className="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-md font-mono">
+                                        S/N: {sn}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Accessories & Consumables */}
+                      {accessories.length > 0 && (
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-[#94a3b8] mb-2">🔧 Accessories & Consumables</p>
+                          <div className="bg-[#0f1117] rounded-lg border border-[#2a2d3e] divide-y divide-[#2a2d3e]">
+                            {accessories.map((item: any, idx: number) => (
+                              <div key={idx} className="flex items-center justify-between px-3 py-2">
+                                <div className="min-w-0">
+                                  <p className="text-xs text-[#f1f5f9] truncate">{item.description}</p>
+                                  <p className="text-[10px] text-[#94a3b8]">{item.itemCode}</p>
+                                </div>
+                                <span className="text-xs text-[#94a3b8] shrink-0 ml-2">
+                                  ×{item.shippedQty ?? item.orderedQty}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Ship To */}
+                      {pl.shipTo && (
+                        <div className="text-xs">
+                          <span className="text-[#94a3b8]">Ship To:</span>
+                          <span className="ml-1 text-[#f1f5f9]">{pl.shipTo}</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                } catch { return null }
+              })()}
+
+              {/* View PDF button — fallback for run-up jobs without parsed data but with a PDF */}
+              {isRunup && !job?.special_instructions && job?.install_pdf_url && (
+                <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130]">
+                  <a
+                    href={job.install_pdf_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 transition-colors"
+                  >
+                    <FileText className="w-4 h-4" />
+                    View Packing List PDF
+                  </a>
+                </div>
+              )}
+
               {/* Common: Run-Up Checklist */}
               {isRunup && (
                 <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130]">

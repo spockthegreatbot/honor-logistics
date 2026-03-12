@@ -7,6 +7,7 @@ import { readFileSync } from 'fs'
 import mammoth from 'mammoth'
 import { isRunupJobRequest, parseRunupEmail } from './parse-runup-email.mjs'
 import { PDFParse } from 'pdf-parse'
+import { parsePackingListText } from './parse-runup-pdf.mjs'
 
 // Load env from .env.local
 const envFile = new URL('../.env.local', import.meta.url).pathname
@@ -26,6 +27,29 @@ const BOT_TOKEN = envVars.HONOR_BOT_TOKEN
 const GROUP_CHAT_ID = envVars.HONOR_GROUP_CHAT_ID
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
+
+/**
+ * Parse a Kyocera packing list PDF buffer into structured data.
+ * Uses pdf-parse to extract text, then parsePackingListText for structure.
+ */
+async function parsePackingListFromPdf(pdfBuffer) {
+  try {
+    const parser = new PDFParse()
+    const result = await parser.loadPDF(pdfBuffer)
+    const pages = []
+    for (let i = 0; i < result.numPages; i++) {
+      const page = await result.getPage(i + 1)
+      const textContent = await page.getTextContent()
+      const text = textContent.items.map(item => item.str).join(' ')
+      pages.push(text)
+    }
+    const fullText = pages.join('\n')
+    return parsePackingListText(fullText)
+  } catch (e) {
+    console.error('  PDF text extraction error:', e.message)
+    return null
+  }
+}
 
 async function sendTelegram(text) {
   if (!BOT_TOKEN || !GROUP_CHAT_ID) return
@@ -882,25 +906,105 @@ async function run() {
       if (existingRunup) {
         console.log(`  ⚠️  Duplicate run-up — already exists as ${existingRunup.job_number}`)
       } else {
+        // Parse PDF attachment if present (Kyocera packing list)
+        const pdfAttach = attachments.find(a => a.contentType === 'application/pdf')
+        let pdfUrl = null
+        let packingListData = null
+        let machineModel = null
+        let serialNumber = null
+        let poNumber = null
+        let connote = null
+        let accessories = null
+
+        if (pdfAttach) {
+          console.log(`  📄 PDF found: ${pdfAttach.filename} — parsing packing list...`)
+          try {
+            packingListData = await parsePackingListFromPdf(pdfAttach.content)
+            if (packingListData) {
+              // Extract primary machine model
+              const machines = packingListData.lineItems.filter(i =>
+                /ECOSYS|TASKalfa|LASER.*PRINT|COLOUR.*DIGITAL/i.test(i.description)
+              )
+              machineModel = machines.map(i => {
+                const m = i.description.match(/(ECOSYS\s+\S+|TASKalfa\s+\S+)/i)
+                return m ? m[1] : i.description
+              }).join(' + ') || null
+
+              serialNumber = packingListData.lineItems
+                .flatMap(i => i.serialNumbers).filter(Boolean)[0] || null
+
+              poNumber = packingListData.customerPO || null
+              connote = packingListData.connote || null
+
+              accessories = packingListData.lineItems
+                .filter(i => !/ECOSYS|TASKalfa|LASER.*PRINT|COLOUR.*DIGITAL/i.test(i.description))
+                .map(i => `${i.shippedQty || i.orderedQty}x ${i.description}`)
+                .join(', ') || null
+
+              console.log(`  📦 Parsed: ${packingListData.lineItems.length} line items, machine: ${machineModel}`)
+            }
+          } catch (e) {
+            console.error(`  ⚠️  PDF parse error: ${e.message}`)
+          }
+
+          // Upload PDF to storage
+          try {
+            const storagePath = `runup-pdfs/${runup.jobNumber}/${pdfAttach.filename}`
+            const { error: upErr } = await supabase.storage
+              .from('job-documents')
+              .upload(storagePath, pdfAttach.content, { contentType: 'application/pdf', upsert: true })
+            if (!upErr) {
+              const { data: urlData } = supabase.storage.from('job-documents').getPublicUrl(storagePath)
+              pdfUrl = urlData.publicUrl
+              console.log(`  📎 Uploaded PDF: ${pdfUrl}`)
+            } else {
+              console.error(`  ⚠️  PDF upload error: ${upErr.message}`)
+            }
+          } catch (e) {
+            console.error(`  ⚠️  PDF upload error: ${e.message}`)
+          }
+        }
+
+        // Build rich notes
+        const noteLines = [`Run-up job — OK To Install`, `Subject: ${subject}`]
+        if (packingListData) {
+          noteLines.push('', `Shipment ID: ${packingListData.shipmentId || 'N/A'}`)
+          noteLines.push(`Customer PO: ${packingListData.customerPO || 'N/A'}`)
+          noteLines.push(`Ship Date: ${packingListData.shipDate || 'N/A'}`)
+          noteLines.push(`Connote: ${packingListData.connote || 'N/A'}`)
+          if (packingListData.shipTo) noteLines.push('', `Ship To: ${packingListData.shipTo}`)
+        }
+
         const { data: newRunup, error: runupErr } = await supabase.from('jobs').insert({
           job_number: runup.jobNumber,
           job_type: 'runup',
           status: 'new',
           contact_name: runup.customerName,
           address_to: runup.city || null,
-          notes: runup.notes,
+          notes: noteLines.join('\n'),
+          machine_model: machineModel,
+          serial_number: serialNumber,
+          po_number: poNumber,
+          tracking_number: connote,
+          machine_accessories: accessories,
+          install_pdf_url: pdfUrl,
+          special_instructions: packingListData ? JSON.stringify(packingListData) : null,
         }).select('id, job_number').single()
 
         if (runupErr) {
           console.error(`  ❌ Run-up create error: ${runupErr.message}`)
         } else {
           console.log(`  ✅ Created run-up job ${newRunup.job_number}`)
+          const machineInfo = machineModel ? `\n🖨 Machine: ${machineModel}` : ''
+          const serialInfo = serialNumber ? `\n🔢 Serial: ${serialNumber}` : ''
+          const itemCount = packingListData ? `\n📦 Items: ${packingListData.lineItems.length}` : ''
           await sendTelegram(
             `🆕 <b>New Run-Up Job — ${newRunup.job_number}</b>\n` +
             `👤 Customer: ${runup.customerName || 'Unknown'}\n` +
             `📍 City: ${runup.city || 'Unknown'}\n` +
             (runup.quoteNumber ? `📎 Quote: ${runup.quoteNumber}\n` : '') +
-            `🔗 https://crm.honorremovals.com.au/jobs`
+            machineInfo + serialInfo + itemCount +
+            `\n🔗 https://crm.honorremovals.com.au/jobs`
           )
         }
       }
