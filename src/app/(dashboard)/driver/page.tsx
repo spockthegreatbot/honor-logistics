@@ -14,6 +14,7 @@ export default async function DriverPage() {
     .from('jobs')
     .select('id, job_number, job_type, status, serial_number, machine_model, address_to, contact_name, contact_phone, order_types, scheduled_date, notes, aod_pdf_url, end_customers(name)')
     .not('status', 'in', '(invoiced,cancelled)')
+    .neq('job_type', 'toner')
     .order('scheduled_date', { ascending: true })
     .order('created_at', { ascending: true })
 

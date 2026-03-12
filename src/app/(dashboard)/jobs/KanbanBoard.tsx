@@ -25,6 +25,7 @@ export type BoardColumn =
   | 'delivery_install'
   | 'relocation_install'
   | 'pickup'
+  | 'runup'
   | 'done'
   | 'archived'
 
@@ -56,6 +57,7 @@ const COLUMNS: { id: BoardColumn; label: string; accent: string; headerColor: st
   { id: 'delivery_install',   label: 'Delivery + Install',  accent: 'border-cyan-500/40',    headerColor: 'text-cyan-400' },
   { id: 'relocation_install', label: 'Relocation + Install',accent: 'border-purple-500/40',  headerColor: 'text-purple-400' },
   { id: 'pickup',             label: 'Pickup',              accent: 'border-orange-500/40',  headerColor: 'text-orange-400' },
+  { id: 'runup',              label: 'Run-Ups',             accent: 'border-amber-500/40',   headerColor: 'text-amber-400' },
   { id: 'done',               label: 'Done',                accent: 'border-emerald-500/40', headerColor: 'text-emerald-400' },
   { id: 'archived',           label: 'Archived',            accent: 'border-slate-600/40',   headerColor: 'text-slate-500' },
 ]
@@ -80,7 +82,7 @@ function deriveColumn(job: Job): string | null {
   switch (job.job_type) {
     case 'delivery':   return 'delivery'
     case 'install':    return 'install'
-    case 'runup':      return 'install'
+    case 'runup':      return 'runup'
     case 'collection': return 'pickup'
     case 'toner_ship': return 'delivery'
     case 'inwards':    return 'delivery'

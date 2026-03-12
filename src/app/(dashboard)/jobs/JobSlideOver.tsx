@@ -729,7 +729,8 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                 />
               </div>
 
-              {/* AOD / Digital Signature */}
+              {/* AOD / Digital Signature — only show if an AOD PDF exists (signed or unsigned) */}
+              {(job?.aod_pdf_url || job?.signed_aod_url) && (
               <div className="border border-[#2a2d3e] rounded-xl p-4 bg-[#1e2130] space-y-4">
                 <p className="text-sm font-semibold text-[#f1f5f9]">✍️ AOD / Digital Signature</p>
 
@@ -741,7 +742,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                     onClick={() => { setAodMessage(null); setShowSignaturePad(true) }}
                   >
                     {aodGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenLine className="w-4 h-4" />}
-                    {aodGenerating ? 'Generating…' : 'Get Customer Signature'}
+                    {aodGenerating ? 'Generating…' : 'Request Signature'}
                   </Button>
                 ) : (
                   <div className="space-y-2">
@@ -813,6 +814,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                   )}
                 </div>
               </div>
+              )}
 
             </div>
           )}
@@ -861,7 +863,7 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
             <a href={`/jobs/${job.id}/print`} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm" className="flex items-center gap-2">
                 <Printer className="w-4 h-4" />
-                Print Card
+                Print Booking Form
               </Button>
             </a>
             <div className="flex items-center gap-2">

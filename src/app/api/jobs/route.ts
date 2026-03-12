@@ -32,6 +32,9 @@ export async function GET(request: NextRequest) {
     query = query.not('status', 'in', '(complete,invoiced,cancelled)')
   }
 
+  // Hide toner jobs from the main board — they appear on the Toner page only
+  query = query.neq('job_type', 'toner')
+
   // Pagination safety
   query = query.range(0, 499)
 

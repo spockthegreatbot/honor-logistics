@@ -314,6 +314,24 @@ function parseEfexForm({ raw, html }, subject = '') {
   }
 }
 
+// ── PDF parsing for EFEX booking forms ────────────────────────────────────────
+
+async function extractPdfData(buffer) {
+  try {
+    const parser = new PDFParse({ data: buffer })
+    const result = await parser.getText()
+    const raw = result.text ?? ''
+    // Build a pseudo-HTML table structure from the PDF text so parseEfexForm can reuse
+    // its cell-based extraction. Each line becomes a <td>.
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+    const html = '<table>' + lines.map(l => `<tr><td>${l}</td></tr>`).join('') + '</table>'
+    return { raw, html }
+  } catch (e) {
+    console.error('  PDF parse error:', e.message)
+    return { raw: '', html: '' }
+  }
+}
+
 // Map EFEX order type labels to valid job_type constraint values
 const ORDER_TYPE_MAP = {
   delivery: 'delivery',
@@ -491,7 +509,7 @@ const SPAM_INDICATORS = ['***SPAM***', 'unsubscribe', 'SEO report', '4K', 'chann
 // or "RE: Efex / ..." (replies). Only accept this exact pattern — no domain-wide catch-all.
 const EFEX_SUBJECT_RE = /^(re:\s*)?(fwd?:\s*)?efex\s*\/\s*.+?(delivery|install|collection|pickup|pick[-\s]?up|relocation|toner|consumable)/i
 
-function isEfexJobRequest(subject, body, fromEmail, hasDocx = false) {
+function isEfexJobRequest(subject, body, fromEmail, hasDocxOrPdf = false) {
   // Must be from @efex.com.au domain
   const domain = (fromEmail || '').split('@')[1]?.toLowerCase() ?? ''
   const isEfexDomain = EFEX_JOB_DOMAINS.some(d => domain === d || domain.endsWith('.' + d))
@@ -500,8 +518,8 @@ function isEfexJobRequest(subject, body, fromEmail, hasDocx = false) {
   // Skip spam indicators
   if (SPAM_INDICATORS.some(s => subject.includes(s))) return false
 
-  // If it has a DOCX booking form attachment → definitely a job request
-  if (hasDocx) return true
+  // If it has a DOCX or PDF booking form attachment → definitely a job request
+  if (hasDocxOrPdf) return true
 
   // Otherwise require the subject to match the EFEX job pattern exactly
   // This prevents newsletters, promotions, and other @efex.com.au emails from becoming jobs
@@ -871,11 +889,19 @@ async function run() {
       continue
     }
 
-    // ── EFEX docx job request form ─────────────────────────────────────────────
+    // ── EFEX docx/pdf job request form ──────────────────────────────────────────
     const docxAttach = attachments.find(a =>
       a.filename.toLowerCase().endsWith('.docx') ||
       a.contentType.includes('wordprocessingml') ||
       a.contentType.includes('msword')
+    )
+    // Also look for a PDF booking form (not AOD — exclude files with 'aod' or 'acknowledgment' in name)
+    const efexPdfAttach = attachments.find(a =>
+      a.contentType === 'application/pdf' &&
+      !a.filename.toLowerCase().includes('aod') &&
+      !a.filename.toLowerCase().includes('acknowledgment') &&
+      !a.filename.toLowerCase().startsWith('job nocomment') &&
+      !a.filename.toLowerCase().startsWith('edi label')
     )
     let docxFields = null
     if (docxAttach) {
@@ -884,6 +910,14 @@ async function run() {
       if (docxData.raw) {
         docxFields = parseEfexForm(docxData, subject)
         console.log(`  📄 Parsed: types=${JSON.stringify(docxFields.orderTypes)} customer="${docxFields.customerName}" model="${docxFields.machineModel}" serial="${docxFields.machineSerial}" addr="${docxFields.address?.slice(0,40)}")`)
+      }
+    } else if (efexPdfAttach && isEfexJobRequest(subject, body, from, false)) {
+      // EFEX now sometimes sends PDF instead of DOCX — parse it the same way
+      console.log(`  📄 EFEX PDF booking form found: ${efexPdfAttach.filename} — parsing...`)
+      const pdfData = await extractPdfData(efexPdfAttach.content)
+      if (pdfData.raw) {
+        docxFields = parseEfexForm(pdfData, subject)
+        console.log(`  📄 PDF Parsed: types=${JSON.stringify(docxFields.orderTypes)} customer="${docxFields.customerName}" model="${docxFields.machineModel}" serial="${docxFields.machineSerial}" addr="${docxFields.address?.slice(0,40)}")`)
       }
     }
 
@@ -895,7 +929,7 @@ async function run() {
 
     if (aodAttach) {
       console.log(`  📎 AOD PDF: ${aodAttach.filename}`)
-      if (isEfexJobRequest(subject, body, from, !!docxAttach) || docxFields) {
+      if (isEfexJobRequest(subject, body, from, !!(docxAttach || efexPdfAttach)) || docxFields) {
         console.log(`  🆕 Also a job request — creating job + saving AOD PDF`)
         const jobResult = await createJobFromEmail(body, subject, docxFields)
         // Upload the AOD PDF and attach to the job
@@ -909,7 +943,7 @@ async function run() {
       }
     }
 
-    if (!aodAttach && (isEfexJobRequest(subject, body, from, !!docxAttach) || docxFields)) {
+    if (!aodAttach && (isEfexJobRequest(subject, body, from, !!(docxAttach || efexPdfAttach)) || docxFields)) {
       console.log(`  🆕 EFEX job request detected`)
       const result = await createJobFromEmail(body, subject, docxFields)
 
