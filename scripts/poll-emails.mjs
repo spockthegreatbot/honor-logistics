@@ -5,6 +5,7 @@ import { simpleParser } from 'mailparser'
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
 import mammoth from 'mammoth'
+import { isRunupJobRequest, parseRunupEmail } from './parse-runup-email.mjs'
 import { PDFParse } from 'pdf-parse'
 
 // Load env from .env.local
@@ -866,6 +867,43 @@ async function run() {
 
     if (isAxusEmail && isThreadReply) {
       console.log(`  ℹ️  Axus thread reply — logged only`)
+      uidsToMark.push(uid)
+      continue
+    }
+
+    // ── Run-up (OK To Install) email handling ──────────────────────────────────
+    if (isRunupJobRequest(subject, body, from)) {
+      console.log(`  🔧 Run-up job email detected`)
+      const runup = parseRunupEmail(subject, body, attachments)
+
+      // Dedup check by job_number
+      const { data: existingRunup } = await supabase.from('jobs')
+        .select('id, job_number').eq('job_number', runup.jobNumber).maybeSingle()
+      if (existingRunup) {
+        console.log(`  ⚠️  Duplicate run-up — already exists as ${existingRunup.job_number}`)
+      } else {
+        const { data: newRunup, error: runupErr } = await supabase.from('jobs').insert({
+          job_number: runup.jobNumber,
+          job_type: 'runup',
+          status: 'new',
+          contact_name: runup.customerName,
+          address_to: runup.city || null,
+          notes: runup.notes,
+        }).select('id, job_number').single()
+
+        if (runupErr) {
+          console.error(`  ❌ Run-up create error: ${runupErr.message}`)
+        } else {
+          console.log(`  ✅ Created run-up job ${newRunup.job_number}`)
+          await sendTelegram(
+            `🆕 <b>New Run-Up Job — ${newRunup.job_number}</b>\n` +
+            `👤 Customer: ${runup.customerName || 'Unknown'}\n` +
+            `📍 City: ${runup.city || 'Unknown'}\n` +
+            (runup.quoteNumber ? `📎 Quote: ${runup.quoteNumber}\n` : '') +
+            `🔗 https://crm.honorremovals.com.au/jobs`
+          )
+        }
+      }
       uidsToMark.push(uid)
       continue
     }
