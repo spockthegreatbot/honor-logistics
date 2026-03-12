@@ -52,12 +52,12 @@ interface Job {
 // ─── Column definitions ──────────────────────────────────────────────────────
 
 const COLUMNS: { id: BoardColumn; label: string; accent: string; headerColor: string }[] = [
+  { id: 'runup',              label: 'Run-Ups',             accent: 'border-amber-500/40',   headerColor: 'text-amber-400' },
   { id: 'delivery',           label: 'Delivery',            accent: 'border-blue-500/40',    headerColor: 'text-blue-400' },
   { id: 'install',            label: 'Install',             accent: 'border-green-500/40',   headerColor: 'text-green-400' },
   { id: 'delivery_install',   label: 'Delivery + Install',  accent: 'border-cyan-500/40',    headerColor: 'text-cyan-400' },
   { id: 'relocation_install', label: 'Relocation + Install',accent: 'border-purple-500/40',  headerColor: 'text-purple-400' },
   { id: 'pickup',             label: 'Pickup',              accent: 'border-orange-500/40',  headerColor: 'text-orange-400' },
-  { id: 'runup',              label: 'Run-Ups',             accent: 'border-amber-500/40',   headerColor: 'text-amber-400' },
   { id: 'done',               label: 'Done',                accent: 'border-emerald-500/40', headerColor: 'text-emerald-400' },
   { id: 'archived',           label: 'Archived',            accent: 'border-slate-600/40',   headerColor: 'text-slate-500' },
 ]

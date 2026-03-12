@@ -375,7 +375,7 @@ function axusBlockField(block, label) {
 
 function axusMapJobType(raw) {
   const lower = raw.toLowerCase()
-  if (lower.includes('consumable') || lower.includes('toner') || lower.includes('supply') || lower.includes('service')) return 'delivery'
+  if (lower.includes('consumable') || lower.includes('toner') || lower.includes('supply')) return 'toner'
   if (lower.includes('install')) return 'install'
   if (lower.includes('collect') || lower.includes('pickup') || lower.includes('pick-up')) return 'pickup'
   return 'delivery'
