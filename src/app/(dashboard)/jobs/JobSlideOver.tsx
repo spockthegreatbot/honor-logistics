@@ -188,7 +188,11 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
         setPickupAccessories(j.pickup_accessories ?? '')
         setPickupSerial(j.pickup_serial ?? '')
         setPickupDisposition(j.pickup_disposition ?? '')
-        setSpecialInstructions(j.special_instructions ?? '')
+        // If special_instructions contains packing list JSON, don't show it in the text field
+        // (the dedicated Packing List section handles display)
+        let si = j.special_instructions ?? ''
+        try { if (si && JSON.parse(si)?.lineItems) si = '' } catch {}
+        setSpecialInstructions(si)
         setSerialNumber(j.serial_number ?? '')
         setMachineModel(j.machine_model ?? '')
         setHasAod(j.has_aod ?? false)

@@ -175,8 +175,8 @@ export default async function PrintJobPage({ params }: { params: Promise<{ id: s
           </Section>
         )}
 
-        {/* Special Instructions */}
-        {j.special_instructions && (
+        {/* Special Instructions — skip if it's packing list JSON */}
+        {j.special_instructions && !(() => { try { return JSON.parse(j.special_instructions)?.lineItems } catch { return false } })() && (
           <Section title="Special Instructions">
             <tr>
               <td colSpan={2} style={{ padding: '8px 10px', fontSize: 12, color: '#111', whiteSpace: 'pre-wrap' }}>
