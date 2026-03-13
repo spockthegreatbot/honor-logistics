@@ -92,7 +92,7 @@ export async function POST(
 
     await transporter.sendMail({
       from: '"Honor Logistics" <automation@honorremovals.com.au>',
-      to: 'tolga1308@gmail.com',
+      to: 'info@honorremovals.com.au',
       subject: `AOD – Job ${jobNum} – ${customerName} – ${dateStr}`,
       html: `
         <p>Hi Onur,</p>
