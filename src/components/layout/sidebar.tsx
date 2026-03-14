@@ -19,6 +19,7 @@ import {
   BarChart3,
   FileText,
   Archive,
+  Warehouse,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -26,6 +27,7 @@ import { createClient } from '@/lib/supabase/client'
 const navItems = [
   { href: '/dashboard',  label: 'Dashboard',        icon: LayoutDashboard, group: 'main' },
   { href: '/jobs',       label: 'Jobs',              icon: Truck,           group: 'main' },
+  { href: '/runups',     label: 'Run-Ups',           icon: Warehouse,       group: 'main' },
   { href: '/calendar',   label: 'Calendar',          icon: CalendarDays,    group: 'main' },
   { href: '/driver',     label: '📱 Driver View',    icon: Smartphone,      group: 'main' },
   { href: '/inventory',  label: 'Inventory / SOH',   icon: Package,         group: 'ops'  },
