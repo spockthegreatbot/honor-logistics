@@ -71,15 +71,19 @@ export default async function DashboardPage() {
       supabase
         .from('jobs')
         .select('*', { count: 'exact', head: true })
-        .not('status', 'in', '(complete,invoiced,cancelled)'),
+        .not('status', 'in', '(complete,invoiced,cancelled,done,delivered)')
+        .neq('job_type', 'toner')
+        .eq('archived', false),
       supabase
         .from('jobs')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'runup_pending'),
+        .eq('job_type', 'runup')
+        .not('status', 'in', '(delivered,done,complete,invoiced,cancelled)')
+        .eq('archived', false),
       supabase
         .from('jobs')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'dispatched')
+        .eq('status', 'in_transit')
         .eq('scheduled_date', todayStr),
       supabase
         .from('inventory')
@@ -159,13 +163,13 @@ export default async function DashboardPage() {
           accent
         />
         <StatCard
-          label="Pending Run-Ups"
+          label="Active Run-Ups"
           value={pendingRunups ?? 0}
           icon={Clock}
           iconColor="text-amber-400"
         />
         <StatCard
-          label="Dispatched Today"
+          label="In Transit Today"
           value={dispatchedToday ?? 0}
           icon={CalendarCheck}
           iconColor="text-green-400"
