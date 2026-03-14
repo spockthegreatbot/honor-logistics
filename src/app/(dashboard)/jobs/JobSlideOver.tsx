@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, CheckCircle2, AlertCircle, Loader2, PenLine, Download, Send, Printer, FileText, RotateCcw } from 'lucide-react'
+import { X, CheckCircle2, AlertCircle, Loader2, PenLine, Download, Send, Printer, FileText, RotateCcw, Trash2 } from 'lucide-react'
 import { SignaturePad } from '@/components/aod/SignaturePad'
 import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -112,9 +112,10 @@ interface Props {
   jobId: string
   onClose: () => void
   onJobUpdated?: (job: Job) => void
+  onDelete?: (jobId: string) => void
 }
 
-export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
+export function JobSlideOver({ jobId, onClose, onJobUpdated, onDelete }: Props) {
   const router = useRouter()
   const [job, setJob] = useState<Job | null>(null)
   const [loading, setLoading] = useState(true)
@@ -154,6 +155,8 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
   const [serialNumber, setSerialNumber] = useState('')
   const [machineModel, setMachineModel] = useState('')
   const [hasAod, setHasAod] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const fetchJob = useCallback(async () => {
     try {
@@ -861,6 +864,43 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated }: Props) {
                   placeholder="Internal notes (not printed)…"
                   className="w-full rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] placeholder:text-[#94a3b8]/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
                 />
+              </div>
+
+              {/* Delete Job */}
+              <div className="pt-4 border-t border-[#2a2d3e]">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full flex items-center gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:border-red-500/50"
+                  disabled={deleteLoading}
+                  onClick={async () => {
+                    setDeleteError(null)
+                    setDeleteLoading(true)
+                    try {
+                      const res = await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' })
+                      if (res.ok) {
+                        onDelete?.(job.id)
+                        onClose()
+                      } else {
+                        const d = await res.json()
+                        setDeleteError(d.error ?? 'Delete failed')
+                      }
+                    } catch {
+                      setDeleteError('Network error')
+                    } finally {
+                      setDeleteLoading(false)
+                    }
+                  }}
+                >
+                  {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  Delete Job
+                </Button>
+                {deleteError && (
+                  <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {deleteError}
+                  </p>
+                )}
               </div>
 
               {/* AOD / Digital Signature — only show if an AOD PDF exists (signed or unsigned) */}

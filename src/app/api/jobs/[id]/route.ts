@@ -88,6 +88,51 @@ export async function PATCH(
   }
 }
 
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await requireAuth()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const supabase = await createClient()
+    const { id } = await params
+
+    // Check if job is linked to a billing cycle
+    const { data: jobCheck } = await supabase
+      .from('jobs')
+      .select('billing_cycle_id')
+      .eq('id', id)
+      .single()
+
+    if (!jobCheck) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+    }
+
+    if (jobCheck.billing_cycle_id) {
+      return NextResponse.json(
+        { error: 'Job is linked to a billing cycle and cannot be deleted.' },
+        { status: 400 }
+      )
+    }
+
+    const { error } = await supabase
+      .from('jobs')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('DELETE /api/jobs/[id] error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

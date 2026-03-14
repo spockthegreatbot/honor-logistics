@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Phone, AlertTriangle, ChevronDown, ChevronUp, PenLine, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Phone, AlertTriangle, ChevronDown, ChevronUp, PenLine, CheckCircle2, Trash2 } from 'lucide-react'
 // AlertTriangle kept for missing-data states only
 import { cn, formatDateTime } from '@/lib/utils'
 import { StatusBar } from '../StatusBar'
@@ -67,11 +67,51 @@ interface EFEXJobCardProps {
   onClick: (id: string) => void
   onStatusChange: (jobId: string, newStatus: string) => void
   onAodClick?: (jobId: string) => void
+  onDelete: (jobId: string) => void
 }
 
-export function EFEXJobCard({ job, onClick, onStatusChange, onAodClick }: EFEXJobCardProps) {
+export function EFEXJobCard({ job, onClick, onStatusChange, onAodClick, onDelete }: EFEXJobCardProps) {
   const [showAllAccessories, setShowAllAccessories] = useState(false)
   const [showInstructions, setShowInstructions] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => { if (confirmTimer.current) clearTimeout(confirmTimer.current) }
+  }, [])
+
+  function handleDeleteClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    setConfirmDelete(true)
+    confirmTimer.current = setTimeout(() => setConfirmDelete(false), 4000)
+  }
+
+  async function handleConfirmDelete(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (confirmTimer.current) clearTimeout(confirmTimer.current)
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        onDelete(job.id)
+      } else {
+        const d = await res.json()
+        alert(d.error ?? 'Delete failed')
+      }
+    } catch {
+      alert('Network error')
+    } finally {
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
+
+  function handleCancelDelete(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (confirmTimer.current) clearTimeout(confirmTimer.current)
+    setConfirmDelete(false)
+  }
 
   const customerName = job.end_customers?.name || job.contact_name || 'Unknown Customer'
   const address = isCollectionType(job) ? job.address_from : job.address_to
@@ -98,9 +138,36 @@ export function EFEXJobCard({ job, onClick, onStatusChange, onAodClick }: EFEXJo
               {getJobTypeLabel(job)}
             </span>
           </div>
-          <span className="text-[11px] font-mono text-[#6b7280]">
-            {job.job_number ? `#${job.job_number.replace('HRL-', '')}` : ''}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-mono text-[#6b7280]">
+              {job.job_number ? `#${job.job_number.replace('HRL-', '')}` : ''}
+            </span>
+            {confirmDelete ? (
+              <span className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={deleting}
+                  className="text-[10px] font-semibold text-red-400 hover:text-red-300 transition px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30"
+                >
+                  {deleting ? '…' : 'Confirm'}
+                </button>
+                <button
+                  onClick={handleCancelDelete}
+                  className="text-[10px] font-semibold text-[#94a3b8] hover:text-[#f1f5f9] transition px-1.5 py-0.5"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={handleDeleteClick}
+                className="p-1 rounded text-[#6b7280] hover:text-red-400 hover:bg-red-500/10 transition"
+                title="Delete job"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Customer name */}

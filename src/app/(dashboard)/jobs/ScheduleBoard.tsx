@@ -143,6 +143,11 @@ export function ScheduleBoard() {
     fetchCounts()
   }, [scope, fetchJobs, fetchCounts])
 
+  function handleDeleteJob(jobId: string) {
+    setJobs(prev => prev.filter(j => j.id !== jobId))
+    setTimeout(fetchCounts, 500)
+  }
+
   function handleStatusChange(jobId: string, newStatus: string) {
     setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: newStatus } : j))
     // Refresh counts after a brief delay
@@ -252,6 +257,7 @@ export function ScheduleBoard() {
                         onClick={setSelectedJobId}
                         onStatusChange={handleStatusChange}
                         onAodClick={handleAodClick}
+                        onDelete={handleDeleteJob}
                       />
                     ))}
                   </div>
@@ -276,6 +282,7 @@ export function ScheduleBoard() {
                         job={job}
                         onClick={setSelectedJobId}
                         onStatusChange={handleStatusChange}
+                        onDelete={handleDeleteJob}
                       />
                     ))}
                   </div>
@@ -301,6 +308,7 @@ export function ScheduleBoard() {
           jobId={selectedJobId}
           onClose={() => setSelectedJobId(null)}
           onJobUpdated={handleJobUpdated}
+          onDelete={handleDeleteJob}
         />
       )}
 
