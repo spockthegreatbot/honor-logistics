@@ -147,6 +147,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'client_id is required' }, { status: 400 })
     }
 
+    // Duplicate detection by client_reference
+    if (client_reference) {
+      const { data: existingByRef } = await supabase
+        .from('jobs')
+        .select('id')
+        .eq('client_reference', client_reference)
+        .eq('client_id', client_id)
+        .limit(1)
+
+      if (existingByRef && existingByRef.length > 0) {
+        return NextResponse.json(
+          { error: 'duplicate', existing_id: existingByRef[0].id },
+          { status: 409 }
+        )
+      }
+    }
+
     // Derive job_type from order_types if it's an EFEX job
     const effectiveJobType = job_type || (order_types?.length > 0 ? order_types[0] : 'delivery')
 
@@ -155,6 +172,20 @@ export async function POST(request: Request) {
     const { count: jobCount } = await supabase.from('jobs').select('*', { count: 'exact', head: true })
     const seq = String((jobCount ?? 0) + 1).padStart(4, '0')
     const jobNumber = `HRL-${now.getFullYear()}-${seq}`
+
+    // Duplicate detection by job_number
+    const { data: existingByNumber } = await supabase
+      .from('jobs')
+      .select('id')
+      .eq('job_number', jobNumber)
+      .limit(1)
+
+    if (existingByNumber && existingByNumber.length > 0) {
+      return NextResponse.json(
+        { error: 'duplicate', existing_id: existingByNumber[0].id },
+        { status: 409 }
+      )
+    }
 
     const initialStatus = effectiveJobType === 'runup' ? 'runup_pending' : 'new'
 

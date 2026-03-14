@@ -703,6 +703,33 @@ async function createJobFromEmail(body, subject, docx = null) {
       }
     }
 
+    // Duplicate check by job_number
+    {
+      const { data: existingByNum } = await supabase
+        .from('jobs')
+        .select('id, job_number')
+        .eq('job_number', jobNumber)
+        .limit(1)
+      if (existingByNum?.length > 0) {
+        console.log(`  [SKIP] Duplicate job: ${jobNumber} already exists`)
+        return { id: existingByNum[0].id, job_number: existingByNum[0].job_number, duplicate: true }
+      }
+    }
+
+    // Duplicate check by client_reference
+    if (ref && ref.length >= 5 && !SKIP_REFS.has(ref.toLowerCase())) {
+      const { data: existingByCR } = await supabase
+        .from('jobs')
+        .select('id, job_number')
+        .eq('client_reference', ref)
+        .eq('client_id', clientId)
+        .limit(1)
+      if (existingByCR?.length > 0) {
+        console.log(`  [SKIP] Duplicate by client_reference: ${ref}`)
+        return { id: existingByCR[0].id, job_number: existingByCR[0].job_number, duplicate: true }
+      }
+    }
+
     // Look up or create end_customer from docx customer name
     let endCustomerId = null
     const endCustomerName = d.customerName ?? null
