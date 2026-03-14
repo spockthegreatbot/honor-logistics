@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { Phone, Trash2, ChevronDown, ChevronUp, Paperclip } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StatusBar } from '../StatusBar'
+import { QuickActionButton } from './QuickActionButton'
 
 interface Job {
   id: string
@@ -429,11 +430,17 @@ export function JobCard({ job, onClick, onStatusChange, onDelete, selectable, se
       </div>
 
       {/* Status bar */}
-      <div className="px-4 pb-4 md:px-5 md:pb-5">
+      <div className="px-4 pb-4 md:px-5 md:pb-5 space-y-2">
         <StatusBar
           type={statusType}
           currentStatus={job.status ?? 'new'}
           jobId={job.id}
+          onStatusChange={onStatusChange}
+        />
+        <QuickActionButton
+          jobId={job.id}
+          currentStatus={job.status ?? 'new'}
+          type={statusType}
           onStatusChange={onStatusChange}
         />
       </div>

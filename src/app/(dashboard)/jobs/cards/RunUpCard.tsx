@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Package, Calendar, Building2, ChevronDown, ChevronUp, FileText, ExternalLink, Trash2, Paperclip } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { StatusBar } from '../StatusBar'
+import { QuickActionButton } from './QuickActionButton'
 
 interface LineItem {
   itemCode?: string
@@ -372,11 +373,17 @@ export function RunUpCard({ job, onClick, onStatusChange, onDelete, selectable, 
       </div>
 
       {/* Status bar */}
-      <div className="px-4 pb-4 md:px-5 md:pb-5">
+      <div className="px-4 pb-4 md:px-5 md:pb-5 space-y-2">
         <StatusBar
           type="runup"
           currentStatus={job.status ?? 'new'}
           jobId={job.id}
+          onStatusChange={onStatusChange}
+        />
+        <QuickActionButton
+          jobId={job.id}
+          currentStatus={job.status ?? 'new'}
+          type="runup"
           onStatusChange={onStatusChange}
         />
       </div>

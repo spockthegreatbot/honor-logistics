@@ -5,6 +5,7 @@ import { Phone, AlertTriangle, ChevronDown, ChevronUp, PenLine, CheckCircle2, Tr
 // AlertTriangle kept for missing-data states only
 import { cn, formatDateTime } from '@/lib/utils'
 import { StatusBar } from '../StatusBar'
+import { QuickActionButton } from './QuickActionButton'
 
 interface Job {
   id: string
@@ -388,11 +389,17 @@ export function EFEXJobCard({ job, onClick, onStatusChange, onAodClick, onDelete
       </div>
 
       {/* Status bar */}
-      <div className="px-4 pb-4 md:px-5 md:pb-5">
+      <div className="px-4 pb-4 md:px-5 md:pb-5 space-y-2">
         <StatusBar
           type="efex"
           currentStatus={job.status ?? 'new'}
           jobId={job.id}
+          onStatusChange={onStatusChange}
+        />
+        <QuickActionButton
+          jobId={job.id}
+          currentStatus={job.status ?? 'new'}
+          type="efex"
           onStatusChange={onStatusChange}
         />
       </div>
