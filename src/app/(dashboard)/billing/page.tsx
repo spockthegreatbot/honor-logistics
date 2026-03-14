@@ -44,7 +44,7 @@ export default async function BillingPage({ searchParams }: PageProps) {
     supabase
       .from('billing_cycles')
       .select('*, clients(id, name, color_code)')
-      .order('created_at', { ascending: false }),
+      .order('period_start', { ascending: false }),
   ])
 
   // Count open cycles per client
