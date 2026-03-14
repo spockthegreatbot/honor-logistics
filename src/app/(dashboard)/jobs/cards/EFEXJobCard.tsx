@@ -11,8 +11,8 @@ interface Job {
   job_type: string
   order_types?: string[] | null
   status: string | null
-  serial_number: string | null
-  scheduled_date: string | null
+  serial_number?: string | null
+  scheduled_date?: string | null
   address_to?: string | null
   address_from?: string | null
   machine_model?: string | null

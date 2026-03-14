@@ -28,9 +28,9 @@ interface Job {
   job_number: string | null
   job_type: string
   status: string | null
-  serial_number: string | null
-  scheduled_date: string | null
-  po_number: string | null
+  serial_number?: string | null
+  scheduled_date?: string | null
+  po_number?: string | null
   contact_name?: string | null
   notes?: string | null
   machine_model?: string | null
