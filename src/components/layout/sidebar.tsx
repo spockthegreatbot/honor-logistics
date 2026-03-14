@@ -24,6 +24,30 @@ import {
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
+function useSidebarCounts() {
+  const [counts, setCounts] = useState<{ today: number; runups: number }>({ today: 0, runups: 0 })
+
+  useState(() => {
+    // Fetch on mount
+    fetch('/api/jobs/counts')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) setCounts({ today: data.today ?? 0, runups: 0 })
+      })
+      .catch(() => {})
+
+    // Fetch runup count
+    fetch('/api/runups?group=active')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) setCounts(prev => ({ ...prev, runups: data.count ?? (data.data?.length ?? 0) }))
+      })
+      .catch(() => {})
+  })
+
+  return counts
+}
+
 const navItems = [
   { href: '/dashboard',  label: 'Dashboard',        icon: LayoutDashboard, group: 'main' },
   { href: '/jobs',       label: 'Jobs',              icon: Truck,           group: 'main' },
@@ -51,12 +75,14 @@ function NavLink({
   icon: Icon,
   active,
   onClick,
+  badge,
 }: {
   href: string
   label: string
   icon: React.ElementType
   active: boolean
   onClick?: () => void
+  badge?: number
 }) {
   return (
     <Link
@@ -71,6 +97,11 @@ function NavLink({
     >
       <Icon className={cn('w-4 h-4 shrink-0', active ? 'text-white' : '')} strokeWidth={2} />
       {label}
+      {badge != null && badge > 0 && (
+        <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-orange-500 text-white">
+          {badge}
+        </span>
+      )}
     </Link>
   )
 }
@@ -79,6 +110,13 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const sidebarCounts = useSidebarCounts()
+
+  // Build badge map
+  const badgeMap: Record<string, number> = {
+    '/jobs': sidebarCounts.today,
+    '/runups': sidebarCounts.runups,
+  }
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -111,6 +149,7 @@ export function Sidebar() {
                     icon={item.icon}
                     active={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))}
                     onClick={() => setMobileOpen(false)}
+                    badge={badgeMap[item.href]}
                   />
                 ))}
               </div>
