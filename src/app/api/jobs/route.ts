@@ -79,6 +79,11 @@ export async function GET(request: NextRequest) {
         query = query.eq('archived', false)
         query = query.not('status', 'in', '(done,complete,invoiced,cancelled)')
         break
+      case 'ready-to-bill':
+      case 'ready_to_bill':
+        query = query.in('status', ['done', 'delivered', 'complete'])
+        query = query.eq('archived', false)
+        break
       case 'archived':
         query = query.eq('archived', true)
         query = query.order('scheduled_date', { ascending: false })

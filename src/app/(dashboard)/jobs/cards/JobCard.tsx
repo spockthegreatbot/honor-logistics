@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Phone, Trash2, ChevronDown, ChevronUp, Paperclip } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { StatusBar } from '../StatusBar'
 
 interface Job {
@@ -47,6 +48,9 @@ interface JobCardProps {
   onClick: (id: string) => void
   onStatusChange: (jobId: string, newStatus: string) => void
   onDelete: (jobId: string) => void
+  selectable?: boolean
+  selected?: boolean
+  onSelect?: (jobId: string) => void
 }
 
 // Human-readable labels for field keys
@@ -134,7 +138,7 @@ function formatFieldValue(key: string, value: unknown): React.ReactNode {
   return String(value)
 }
 
-export function JobCard({ job, onClick, onStatusChange, onDelete }: JobCardProps) {
+export function JobCard({ job, onClick, onStatusChange, onDelete, selectable, selected, onSelect }: JobCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showInstructions, setShowInstructions] = useState(false)
@@ -237,10 +241,23 @@ export function JobCard({ job, onClick, onStatusChange, onDelete }: JobCardProps
 
   return (
     <div
-      className="bg-[#1e2130] rounded-xl border border-[#2a2d3e] shadow-sm hover:border-[#3a3d4e] transition-colors cursor-pointer"
+      className={cn(
+        'bg-[#1e2130] rounded-xl border shadow-sm hover:border-[#3a3d4e] transition-colors cursor-pointer relative',
+        selectable && selected ? 'border-[#f97316] ring-1 ring-[#f97316]/30' : 'border-[#2a2d3e]'
+      )}
       onClick={() => onClick(job.id)}
     >
-      <div className="p-4 md:p-5 space-y-3">
+      {selectable && (
+        <div className="absolute top-3 left-3 z-10" onClick={e => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected ?? false}
+            onChange={() => onSelect?.(job.id)}
+            className="w-4 h-4 rounded border-[#2a2d3e] bg-[#0f1117] text-[#f97316] focus:ring-[#f97316] focus:ring-offset-0 cursor-pointer accent-[#f97316]"
+          />
+        </div>
+      )}
+      <div className={cn('p-4 md:p-5 space-y-3', selectable && 'pl-10 md:pl-11')}>
         {/* Header: job number + client badge + job type + delete */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
