@@ -255,7 +255,7 @@ async function createJobFromDocx(supabase: any, docxBuffer: Buffer, attachments:
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET ?? 'honor-cron-secret'
+  const cronSecret = (process.env.CRON_SECRET ?? 'honor-cron-secret').trim()
   if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
