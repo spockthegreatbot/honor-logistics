@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { Phone, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Phone, Trash2, ChevronDown, ChevronUp, Paperclip } from 'lucide-react'
 import { StatusBar } from '../StatusBar'
 
 interface Job {
@@ -33,6 +33,7 @@ interface Job {
   po_number?: string | null
   notes?: string | null
   tracking_number?: string | null
+  booking_form_url?: string | null
   install_pdf_url?: string | null
   runup_completed?: boolean | null
   machine_details?: string | null
@@ -91,6 +92,7 @@ const SKIP_FIELDS = new Set([
   'special_instructions', 'has_aod', 'aod_pdf_url', 'aod_signed_at',
   'signed_aod_url', 'signed_aod_at', 'archived', 'runup_completed',
   'contact_phone', // shown inline with contact_name
+  'booking_form_url', // shown in attachment pills
 ])
 
 function tryParseJson(str: string): Record<string, unknown> | null {
@@ -283,6 +285,48 @@ export function JobCard({ job, onClick, onStatusChange, onDelete }: JobCardProps
             )}
           </div>
         </div>
+
+        {/* Attachment pills */}
+        {(job.booking_form_url || job.install_pdf_url || job.aod_pdf_url) && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {job.booking_form_url && (
+              <a
+                href={job.booking_form_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#f97316]/15 text-[#f97316] hover:bg-[#f97316]/25 border border-[#f97316]/30 transition"
+              >
+                <Paperclip className="w-3 h-3" />
+                Booking Form
+              </a>
+            )}
+            {job.install_pdf_url && (
+              <a
+                href={job.install_pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#f97316]/15 text-[#f97316] hover:bg-[#f97316]/25 border border-[#f97316]/30 transition"
+              >
+                <Paperclip className="w-3 h-3" />
+                Packing List
+              </a>
+            )}
+            {job.aod_pdf_url && (
+              <a
+                href={job.aod_pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#f97316]/15 text-[#f97316] hover:bg-[#f97316]/25 border border-[#f97316]/30 transition"
+              >
+                <Paperclip className="w-3 h-3" />
+                AOD
+              </a>
+            )}
+          </div>
+        )}
 
         {/* Customer / end customer name */}
         {(job.end_customers?.name || job.contact_name) && (

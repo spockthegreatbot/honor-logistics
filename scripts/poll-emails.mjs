@@ -617,7 +617,7 @@ async function createMitronicsJob(body, subject, fromEmail, fromName) {
   }
 }
 
-async function createJobFromEmail(body, subject, docx = null) {
+async function createJobFromEmail(body, subject, docx = null, bookingFormUrl = null) {
   try {
     const { data: efexClient } = await supabase.from('clients').select('id').ilike('name', '%efex%').limit(1).single()
     const clientId = efexClient?.id ?? null
@@ -767,6 +767,7 @@ async function createJobFromEmail(body, subject, docx = null) {
       special_instructions: specialInstructions,
       machine_model: machineModel,
       has_aod: false,
+      booking_form_url: bookingFormUrl,
       notes: `Auto-created from email — review and update fields as needed.\nSubject: ${subject}${endCustomerName ? '\nCustomer: ' + endCustomerName : ''}`,
     }).select('id, job_number').single()
 
@@ -1310,7 +1311,16 @@ async function run() {
       console.log(`  📎 AOD PDF: ${aodAttach.filename}`)
       if (isEfexJobRequest(subject, body, from, !!(docxAttach || efexPdfAttach)) || docxFields) {
         console.log(`  🆕 Also a job request — creating job + saving AOD PDF`)
-        const jobResult = await createJobFromEmail(body, subject, docxFields)
+        // Upload EFEX booking form (DOCX or PDF) before creating job
+        let efexBookingFormUrl = null
+        if (docxAttach) {
+          efexBookingFormUrl = await uploadToSupabase('efex-booking-forms', docxAttach.filename, docxAttach.content, docxAttach.contentType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+          if (efexBookingFormUrl) console.log(`  📎 EFEX booking form (DOCX) uploaded`)
+        } else if (efexPdfAttach) {
+          efexBookingFormUrl = await uploadToSupabase('efex-booking-forms', efexPdfAttach.filename, efexPdfAttach.content, 'application/pdf')
+          if (efexBookingFormUrl) console.log(`  📎 EFEX booking form (PDF) uploaded`)
+        }
+        const jobResult = await createJobFromEmail(body, subject, docxFields, efexBookingFormUrl)
         // Upload the AOD PDF and attach to the job
         if (jobResult?.id) {
           const aodUrl = await uploadToSupabase('aod-documents/efex-aod', aodAttach.filename, aodAttach.content, 'application/pdf')
@@ -1324,7 +1334,16 @@ async function run() {
 
     if (!aodAttach && (isEfexJobRequest(subject, body, from, !!(docxAttach || efexPdfAttach)) || docxFields)) {
       console.log(`  🆕 EFEX job request detected`)
-      const result = await createJobFromEmail(body, subject, docxFields)
+      // Upload EFEX booking form (DOCX or PDF) before creating job
+      let efexBookingFormUrl = null
+      if (docxAttach) {
+        efexBookingFormUrl = await uploadToSupabase('efex-booking-forms', docxAttach.filename, docxAttach.content, docxAttach.contentType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        if (efexBookingFormUrl) console.log(`  📎 EFEX booking form (DOCX) uploaded`)
+      } else if (efexPdfAttach) {
+        efexBookingFormUrl = await uploadToSupabase('efex-booking-forms', efexPdfAttach.filename, efexPdfAttach.content, 'application/pdf')
+        if (efexBookingFormUrl) console.log(`  📎 EFEX booking form (PDF) uploaded`)
+      }
+      const result = await createJobFromEmail(body, subject, docxFields, efexBookingFormUrl)
 
       if (result && !result.duplicate) {
         console.log(`  ✅ Created: ${result.job_number}`)
