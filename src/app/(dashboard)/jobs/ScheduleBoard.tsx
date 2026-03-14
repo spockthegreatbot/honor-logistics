@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, CalendarPlus, FileCheck } from 'lucide-react'
+import { Plus, CalendarPlus, FileCheck, CheckSquare, Loader2, Archive, Truck, CheckCircle2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { DateNav, type DateScope } from './DateNav'
 import { EFEXJobCard } from './cards/EFEXJobCard'
@@ -85,6 +85,9 @@ export function ScheduleBoard() {
   const [showNewJob, setShowNewJob] = useState(false)
   const [selectedBillJobs, setSelectedBillJobs] = useState<Set<string>>(new Set())
   const [invoicing, setInvoicing] = useState(false)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
+  const [bulkActing, setBulkActing] = useState(false)
   const router = useRouter()
 
   const fetchJobs = useCallback(async (s: DateScope) => {
@@ -202,9 +205,67 @@ export function ScheduleBoard() {
 
   async function handleBulkInvoice() {
     if (selectedBillJobs.size === 0) return
-    // Navigate to the invoice builder page
     router.push('/billing/generate')
   }
+
+  function toggleBulkSelect(jobId: string) {
+    setBulkSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(jobId)) next.delete(jobId)
+      else next.add(jobId)
+      return next
+    })
+  }
+
+  async function handleBulkAction(action: 'done' | 'in_transit' | 'archive') {
+    if (bulkSelected.size === 0 || bulkActing) return
+    setBulkActing(true)
+
+    const ids = Array.from(bulkSelected)
+    const updates: Promise<Response>[] = []
+
+    for (const id of ids) {
+      const job = jobs.find(j => j.id === id)
+      if (!job) continue
+
+      let body: Record<string, unknown> = {}
+      if (action === 'done') {
+        const doneStatus = job.job_type === 'runup' ? 'delivered' : 'complete'
+        body = { status: doneStatus }
+      } else if (action === 'in_transit') {
+        body = { status: 'in_transit' }
+      } else if (action === 'archive') {
+        body = { archived: true }
+      }
+
+      updates.push(
+        fetch(`/api/jobs/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      )
+    }
+
+    try {
+      await Promise.all(updates)
+      // Refresh
+      setBulkSelected(new Set())
+      setBulkMode(false)
+      fetchJobs(scope)
+      fetchCounts()
+    } catch {
+      // silent
+    } finally {
+      setBulkActing(false)
+    }
+  }
+
+  // Clear bulk mode when scope changes
+  useEffect(() => {
+    setBulkMode(false)
+    setBulkSelected(new Set())
+  }, [scope])
 
   const isEmpty = sortedJobs.length === 0
 
@@ -216,8 +277,21 @@ export function ScheduleBoard() {
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
         {/* Scope header */}
-        <div className="sticky top-0 z-10 bg-[#0f1117]/95 backdrop-blur-sm border-b border-[#2a2d3e] px-4 md:px-6 py-3">
+        <div className="sticky top-0 z-10 bg-[#0f1117]/95 backdrop-blur-sm border-b border-[#2a2d3e] px-4 md:px-6 py-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-[#f1f5f9]">{getScopeLabel(scope)}</h2>
+          {scope !== 'ready_to_bill' && sortedJobs.length > 0 && (
+            <button
+              onClick={() => { setBulkMode(!bulkMode); setBulkSelected(new Set()) }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                bulkMode
+                  ? 'bg-[#f97316] text-[#0f1117]'
+                  : 'bg-[#1e2130] text-[#94a3b8] hover:text-[#f1f5f9] border border-[#2a2d3e]'
+              }`}
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              {bulkMode ? 'Cancel' : 'Bulk Select'}
+            </button>
+          )}
         </div>
 
         <div className="p-4 md:p-6 space-y-6">
@@ -384,6 +458,9 @@ export function ScheduleBoard() {
                         onStatusChange={handleStatusChange}
                         onAodClick={handleAodClick}
                         onDelete={handleDeleteJob}
+                        selectable={bulkMode}
+                        selected={bulkSelected.has(job.id)}
+                        onSelect={toggleBulkSelect}
                       />
                     )
                   }
@@ -395,10 +472,12 @@ export function ScheduleBoard() {
                         onClick={setSelectedJobId}
                         onStatusChange={handleStatusChange}
                         onDelete={handleDeleteJob}
+                        selectable={bulkMode}
+                        selected={bulkSelected.has(job.id)}
+                        onSelect={toggleBulkSelect}
                       />
                     )
                   }
-                  // Fallback: generic card for any other job type
                   return (
                     <JobCard
                       key={job.id}
@@ -406,11 +485,51 @@ export function ScheduleBoard() {
                       onClick={setSelectedJobId}
                       onStatusChange={handleStatusChange}
                       onDelete={handleDeleteJob}
+                      selectable={bulkMode}
+                      selected={bulkSelected.has(job.id)}
+                      onSelect={toggleBulkSelect}
                     />
                   )
                 })}
               </div>
             </section>
+          )}
+
+          {/* Bulk action sticky footer */}
+          {bulkMode && bulkSelected.size > 0 && (
+            <div className="sticky bottom-0 z-20 bg-[#0f1117]/95 backdrop-blur-sm border-t border-[#2a2d3e] px-4 md:px-6 py-4 -mx-4 md:-mx-6 -mb-6">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <span className="text-sm font-semibold text-[#f1f5f9]">
+                  {bulkSelected.size} selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleBulkAction('in_transit')}
+                    disabled={bulkActing}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600 transition min-h-[44px] disabled:opacity-50"
+                  >
+                    {bulkActing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+                    Mark In Transit
+                  </button>
+                  <button
+                    onClick={() => handleBulkAction('done')}
+                    disabled={bulkActing}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition min-h-[44px] disabled:opacity-50"
+                  >
+                    {bulkActing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    Mark Done
+                  </button>
+                  <button
+                    onClick={() => handleBulkAction('archive')}
+                    disabled={bulkActing}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#2a2d3e] text-[#94a3b8] text-sm font-semibold hover:bg-[#363a52] hover:text-[#f1f5f9] transition min-h-[44px] disabled:opacity-50"
+                  >
+                    {bulkActing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                    Archive
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </main>
