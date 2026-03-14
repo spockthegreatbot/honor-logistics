@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
   const clientId = searchParams.get('client_id')
   const status = searchParams.get('status')
   const clientRef = searchParams.get('client_reference')
+  const scope = searchParams.get('scope')
 
   const showAll = searchParams.get('show_all') === '1'
 
@@ -25,11 +26,67 @@ export async function GET(request: NextRequest) {
 
   if (clientId && clientId !== 'all') query = query.eq('client_id', clientId)
   if (clientRef) query = query.ilike('client_reference', `%${clientRef}%`)
-  if (status && status !== 'all') {
-    query = query.eq('status', status)
-  } else if (!showAll) {
-    // Default: exclude completed/invoiced/cancelled to show active jobs only
-    query = query.not('status', 'in', '(complete,invoiced,cancelled)')
+
+  // Schedule Board scope filtering
+  if (scope) {
+    const now = new Date()
+    const todayStr = now.toISOString().slice(0, 10)
+
+    const addDays = (d: Date, n: number) => {
+      const r = new Date(d)
+      r.setDate(r.getDate() + n)
+      return r.toISOString().slice(0, 10)
+    }
+
+    const tomorrowStr = addDays(now, 1)
+
+    switch (scope) {
+      case 'today':
+        // Jobs scheduled today OR overdue (past date, not done/invoiced) OR in_transit
+        query = query.or(`scheduled_date.eq.${todayStr},scheduled_date.lt.${todayStr},status.eq.in_transit`)
+        query = query.not('status', 'in', '(complete,invoiced,cancelled)')
+        query = query.eq('archived', false)
+        break
+      case 'tomorrow':
+        query = query.eq('scheduled_date', tomorrowStr)
+        query = query.not('status', 'in', '(complete,invoiced,cancelled)')
+        query = query.eq('archived', false)
+        break
+      case 'week': {
+        // Today+1 through today+7
+        const weekEnd = addDays(now, 7)
+        query = query.gte('scheduled_date', tomorrowStr)
+        query = query.lte('scheduled_date', weekEnd)
+        query = query.not('status', 'in', '(complete,invoiced,cancelled)')
+        query = query.eq('archived', false)
+        break
+      }
+      case 'next_week': {
+        // Today+8 through today+14
+        const nwStart = addDays(now, 8)
+        const nwEnd = addDays(now, 14)
+        query = query.gte('scheduled_date', nwStart)
+        query = query.lte('scheduled_date', nwEnd)
+        query = query.not('status', 'in', '(complete,invoiced,cancelled)')
+        query = query.eq('archived', false)
+        break
+      }
+      case 'unscheduled':
+        query = query.is('scheduled_date', null)
+        query = query.eq('archived', false)
+        query = query.not('status', 'in', '(done,complete,invoiced,cancelled)')
+        break
+      default:
+        // Unknown scope — fall through to default behavior
+        break
+    }
+  } else {
+    if (status && status !== 'all') {
+      query = query.eq('status', status)
+    } else if (!showAll) {
+      // Default: exclude completed/invoiced/cancelled to show active jobs only
+      query = query.not('status', 'in', '(complete,invoiced,cancelled)')
+    }
   }
 
   // Hide toner jobs from the main board — they appear on the Toner page only
