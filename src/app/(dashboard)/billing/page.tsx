@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Receipt, Plus, Filter } from 'lucide-react'
+import { Receipt, Plus, Filter, FileCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -81,7 +81,13 @@ export default async function BillingPage({ searchParams }: PageProps) {
           <Button size="sm" variant="outline" asChild>
             <Link href="/billing/archive">System Archive</Link>
           </Button>
-          <Button size="sm" asChild className="w-full sm:w-auto">
+          <Button size="sm" asChild className="w-full sm:w-auto bg-[#f97316] text-[#0f1117] hover:bg-[#ea580c]">
+            <Link href="/billing/generate">
+              <FileCheck className="w-4 h-4" />
+              Generate Invoice
+            </Link>
+          </Button>
+          <Button size="sm" variant="outline" asChild className="w-full sm:w-auto">
             <Link href="/billing/new">
               <Plus className="w-4 h-4" />
               New Cycle

@@ -213,31 +213,8 @@ export function ScheduleBoard() {
 
   async function handleBulkInvoice() {
     if (selectedBillJobs.size === 0) return
-    setInvoicing(true)
-    try {
-      const res = await fetch('/api/jobs/bulk-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobIds: Array.from(selectedBillJobs) }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        alert(data.error ?? 'Failed to invoice jobs')
-        return
-      }
-      // Refresh the board
-      setSelectedBillJobs(new Set())
-      fetchJobs(scope)
-      fetchCounts()
-      // If we got a billing cycle, redirect to preview
-      if (data.billing_cycle_id) {
-        router.push(`/billing/${data.billing_cycle_id}/preview`)
-      }
-    } catch {
-      alert('Network error')
-    } finally {
-      setInvoicing(false)
-    }
+    // Navigate to the invoice builder page
+    router.push('/billing/generate')
   }
 
   const isEmpty = sortedJobs.length === 0

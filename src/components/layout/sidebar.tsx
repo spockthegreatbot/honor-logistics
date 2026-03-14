@@ -31,6 +31,7 @@ const navItems = [
   { href: '/inventory',  label: 'Inventory / SOH',   icon: Package,         group: 'ops'  },
   { href: '/toner',      label: 'Toner Orders',      icon: Printer,         group: 'ops'  },
   { href: '/billing',    label: 'Billing',           icon: Receipt,         group: 'ops'  },
+  { href: '/billing/generate', label: 'Generate Invoice', icon: FileText,     group: 'ops'  },
   { href: '/analytics',  label: '📊 Analytics',      icon: BarChart3,       group: 'ops'  },
   { href: '/archive',    label: 'Archive',           icon: Archive,         group: 'sys'  },
   { href: '/settings',   label: 'Settings',          icon: Settings2,       group: 'sys'  },
