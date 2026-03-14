@@ -3,9 +3,10 @@ export const CLIENT_COLORS: Record<string, string> = {
   'Fuji Solutions': '#3b82f6',
   'Evolved Digital': '#8b5cf6',
   'AXUS': '#10b981',
+  'Mitronics': '#8B5CF6',
 }
 
-export const BILLING_CLIENTS = ['EFEX', 'Fuji Solutions', 'Evolved Digital', 'AXUS'] as const
+export const BILLING_CLIENTS = ['EFEX', 'AXUS', 'Evolved Digital', 'Fuji Solutions', 'Mitronics'] as const
 export type BillingClientName = typeof BILLING_CLIENTS[number]
 
 /** Short display labels for Kanban badges */
@@ -14,6 +15,7 @@ export const CLIENT_SHORT_NAMES: Record<string, string> = {
   'Fuji Solutions': 'Fuji',
   'Evolved Digital': 'Evolved',
   'AXUS': 'AXUS',
+  'Mitronics': 'Mitronics',
 }
 
 /**
