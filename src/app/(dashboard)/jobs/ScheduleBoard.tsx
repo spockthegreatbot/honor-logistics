@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, CalendarPlus } from 'lucide-react'
 import { DateNav, type DateScope } from './DateNav'
-import { EFEXJobCard } from './cards/EFEXJobCard'
-import { RunUpCard } from './cards/RunUpCard'
+import { JobCard } from './cards/JobCard'
 import { JobSlideOver } from './JobSlideOver'
 import { NewJobSlideOver } from './NewJobSlideOver'
 
@@ -66,34 +65,6 @@ function getScopeLabel(scope: DateScope): string {
     case 'next_week': return 'Next Week'
     case 'unscheduled': return 'Unscheduled'
   }
-}
-
-// Sort EFEX: by status progression, then by customer name
-const EFEX_STATUS_ORDER: Record<string, number> = {
-  new: 0, scheduled: 0, ready: 1, dispatched: 2, in_transit: 2, complete: 3, done: 3, invoiced: 4,
-}
-
-function sortEfex(a: Job, b: Job): number {
-  const sa = EFEX_STATUS_ORDER[a.status ?? 'new'] ?? 0
-  const sb = EFEX_STATUS_ORDER[b.status ?? 'new'] ?? 0
-  if (sa !== sb) return sa - sb
-  const na = (a.end_customers?.name || a.contact_name || '').toLowerCase()
-  const nb = (b.end_customers?.name || b.contact_name || '').toLowerCase()
-  return na.localeCompare(nb)
-}
-
-// Sort RunUp: by status progression, then ship date
-const RUNUP_STATUS_ORDER: Record<string, number> = {
-  new: 0, runup_pending: 0, received: 0, runup_complete: 1, stored: 1, delivered: 2, complete: 2,
-}
-
-function sortRunup(a: Job, b: Job): number {
-  const sa = RUNUP_STATUS_ORDER[a.status ?? 'new'] ?? 0
-  const sb = RUNUP_STATUS_ORDER[b.status ?? 'new'] ?? 0
-  if (sa !== sb) return sa - sb
-  const da = a.scheduled_date ?? ''
-  const db = b.scheduled_date ?? ''
-  return da.localeCompare(db)
 }
 
 export function ScheduleBoard() {
@@ -168,15 +139,22 @@ export function ScheduleBoard() {
     setSelectedJobId(jobId)
   }
 
-  // Split into EFEX and RunUp groups
-  const efexJobs = jobs
-    .filter(j => j.job_type !== 'runup' && j.job_type !== 'toner')
-    .sort(sortEfex)
-  const runupJobs = jobs
-    .filter(j => j.job_type === 'runup')
-    .sort(sortRunup)
+  // Sort all jobs: by status progression then name/date
+  const sortedJobs = [...jobs].sort((a, b) => {
+    const STATUS_ORDER: Record<string, number> = {
+      new: 0, scheduled: 0, ready: 1, received: 1, runup_pending: 1,
+      dispatched: 2, in_transit: 2, stored: 2, runup_complete: 2,
+      complete: 3, done: 3, delivered: 3, invoiced: 4,
+    }
+    const sa = STATUS_ORDER[a.status ?? 'new'] ?? 0
+    const sb = STATUS_ORDER[b.status ?? 'new'] ?? 0
+    if (sa !== sb) return sa - sb
+    const na = (a.end_customers?.name || a.contact_name || '').toLowerCase()
+    const nb = (b.end_customers?.name || b.contact_name || '').toLowerCase()
+    return na.localeCompare(nb)
+  })
 
-  const isEmpty = efexJobs.length === 0 && runupJobs.length === 0
+  const isEmpty = sortedJobs.length === 0
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-56px)]">
@@ -237,58 +215,27 @@ export function ScheduleBoard() {
               )}
             </div>
           ) : (
-            <>
-              {/* EFEX Jobs group */}
-              {efexJobs.length > 0 && (
-                <section>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-bold text-[#f1f5f9]">EFEX Jobs</h3>
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#f97316]/20 text-[#f97316]">
-                        {efexJobs.length}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {efexJobs.map(job => (
-                      <EFEXJobCard
-                        key={job.id}
-                        job={job}
-                        onClick={setSelectedJobId}
-                        onStatusChange={handleStatusChange}
-                        onAodClick={handleAodClick}
-                        onDelete={handleDeleteJob}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* Run-Ups group */}
-              {runupJobs.length > 0 && (
-                <section>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-bold text-[#f1f5f9]">Run-Ups</h3>
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#f59e0b]/20 text-[#f59e0b]">
-                        {runupJobs.length}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {runupJobs.map(job => (
-                      <RunUpCard
-                        key={job.id}
-                        job={job}
-                        onClick={setSelectedJobId}
-                        onStatusChange={handleStatusChange}
-                        onDelete={handleDeleteJob}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-            </>
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-[#f1f5f9]">Jobs</h3>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#f97316]/20 text-[#f97316]">
+                    {sortedJobs.length}
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                {sortedJobs.map(job => (
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    onClick={setSelectedJobId}
+                    onStatusChange={handleStatusChange}
+                    onDelete={handleDeleteJob}
+                  />
+                ))}
+              </div>
+            </section>
           )}
         </div>
       </main>
