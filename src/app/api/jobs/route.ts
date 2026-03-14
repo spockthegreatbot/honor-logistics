@@ -79,6 +79,11 @@ export async function GET(request: NextRequest) {
         query = query.eq('archived', false)
         query = query.not('status', 'in', '(done,complete,invoiced,cancelled)')
         break
+      case 'archived':
+        query = query.eq('archived', true)
+        query = query.order('scheduled_date', { ascending: false })
+        query = query.range(0, 49) // Limit to 50 most recent archived jobs
+        break
       default:
         // Unknown scope — fall through to default behavior
         break
