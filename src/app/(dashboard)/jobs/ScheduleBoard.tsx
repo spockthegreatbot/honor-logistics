@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, CalendarPlus } from 'lucide-react'
 import { DateNav, type DateScope } from './DateNav'
+import { EFEXJobCard } from './cards/EFEXJobCard'
+import { RunUpCard } from './cards/RunUpCard'
 import { JobCard } from './cards/JobCard'
 import { JobSlideOver } from './JobSlideOver'
 import { NewJobSlideOver } from './NewJobSlideOver'
@@ -38,6 +40,8 @@ interface Job {
   tracking_number?: string | null
   install_pdf_url?: string | null
   runup_completed?: boolean | null
+  booking_form_url?: string | null
+  machine_details?: string | null
   clients?: { name: string; color_code?: string | null } | null
   end_customers?: { name: string } | null
   staff?: { name: string } | null
@@ -49,6 +53,7 @@ interface ScopeCounts {
   week: number
   next_week: number
   unscheduled: number
+  archived: number
 }
 
 function getScopeLabel(scope: DateScope): string {
@@ -64,6 +69,7 @@ function getScopeLabel(scope: DateScope): string {
     case 'week': return 'This Week'
     case 'next_week': return 'Next Week'
     case 'unscheduled': return 'Unscheduled'
+    case 'archived': return 'Archived'
   }
 }
 
@@ -71,7 +77,7 @@ export function ScheduleBoard() {
   const [scope, setScope] = useState<DateScope>('today')
   const [jobs, setJobs] = useState<Job[]>([])
   const [loading, setLoading] = useState(true)
-  const [counts, setCounts] = useState<ScopeCounts>({ today: 0, tomorrow: 0, week: 0, next_week: 0, unscheduled: 0 })
+  const [counts, setCounts] = useState<ScopeCounts>({ today: 0, tomorrow: 0, week: 0, next_week: 0, unscheduled: 0, archived: 0 })
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [showNewJob, setShowNewJob] = useState(false)
 
@@ -89,7 +95,7 @@ export function ScheduleBoard() {
   }, [])
 
   const fetchCounts = useCallback(async () => {
-    const scopes: DateScope[] = ['today', 'tomorrow', 'week', 'next_week', 'unscheduled']
+    const scopes: DateScope[] = ['today', 'tomorrow', 'week', 'next_week', 'unscheduled', 'archived']
     const results = await Promise.all(
       scopes.map(async (s) => {
         try {
@@ -102,7 +108,7 @@ export function ScheduleBoard() {
         return { scope: s, count: 0 }
       })
     )
-    const c: ScopeCounts = { today: 0, tomorrow: 0, week: 0, next_week: 0, unscheduled: 0 }
+    const c: ScopeCounts = { today: 0, tomorrow: 0, week: 0, next_week: 0, unscheduled: 0, archived: 0 }
     for (const r of results) {
       c[r.scope] = r.count
     }
@@ -224,16 +230,42 @@ export function ScheduleBoard() {
                   </span>
                 </div>
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                {sortedJobs.map(job => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    onClick={setSelectedJobId}
-                    onStatusChange={handleStatusChange}
-                    onDelete={handleDeleteJob}
-                  />
-                ))}
+              <div className={`grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 ${scope === 'archived' ? 'opacity-70' : ''}`}>
+                {sortedJobs.map(job => {
+                  if (job.job_type === 'efex' || (job.clients?.name?.toLowerCase() === 'efex')) {
+                    return (
+                      <EFEXJobCard
+                        key={job.id}
+                        job={job}
+                        onClick={setSelectedJobId}
+                        onStatusChange={handleStatusChange}
+                        onAodClick={handleAodClick}
+                        onDelete={handleDeleteJob}
+                      />
+                    )
+                  }
+                  if (job.job_type === 'runup') {
+                    return (
+                      <RunUpCard
+                        key={job.id}
+                        job={job}
+                        onClick={setSelectedJobId}
+                        onStatusChange={handleStatusChange}
+                        onDelete={handleDeleteJob}
+                      />
+                    )
+                  }
+                  // Fallback: generic card for any other job type
+                  return (
+                    <JobCard
+                      key={job.id}
+                      job={job}
+                      onClick={setSelectedJobId}
+                      onStatusChange={handleStatusChange}
+                      onDelete={handleDeleteJob}
+                    />
+                  )
+                })}
               </div>
             </section>
           )}

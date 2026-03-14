@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Phone, AlertTriangle, ChevronDown, ChevronUp, PenLine, CheckCircle2, Trash2 } from 'lucide-react'
+import { Phone, AlertTriangle, ChevronDown, ChevronUp, PenLine, CheckCircle2, Trash2, Paperclip } from 'lucide-react'
 // AlertTriangle kept for missing-data states only
 import { cn, formatDateTime } from '@/lib/utils'
 import { StatusBar } from '../StatusBar'
@@ -32,6 +32,11 @@ interface Job {
   pickup_serial?: string | null
   pickup_disposition?: string | null
   archived?: boolean | null
+  booking_form_url?: string | null
+  install_pdf_url?: string | null
+  po_number?: string | null
+  notes?: string | null
+  tracking_number?: string | null
   clients?: { name: string; color_code?: string | null } | null
   end_customers?: { name: string } | null
   staff?: { name: string } | null
@@ -169,6 +174,48 @@ export function EFEXJobCard({ job, onClick, onStatusChange, onAodClick, onDelete
             )}
           </div>
         </div>
+
+        {/* Attachment pills */}
+        {(job.booking_form_url || job.install_pdf_url || job.aod_pdf_url) && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {job.booking_form_url && (
+              <a
+                href={job.booking_form_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#f97316]/15 text-[#f97316] hover:bg-[#f97316]/25 border border-[#f97316]/30 transition"
+              >
+                <Paperclip className="w-3 h-3" />
+                Booking Form
+              </a>
+            )}
+            {job.install_pdf_url && (
+              <a
+                href={job.install_pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#f97316]/15 text-[#f97316] hover:bg-[#f97316]/25 border border-[#f97316]/30 transition"
+              >
+                <Paperclip className="w-3 h-3" />
+                Packing List
+              </a>
+            )}
+            {job.aod_pdf_url && (
+              <a
+                href={job.aod_pdf_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#f97316]/15 text-[#f97316] hover:bg-[#f97316]/25 border border-[#f97316]/30 transition"
+              >
+                <Paperclip className="w-3 h-3" />
+                AOD
+              </a>
+            )}
+          </div>
+        )}
 
         {/* Customer name */}
         <h3 className="text-lg font-bold text-[#f1f5f9] leading-tight line-clamp-2">
