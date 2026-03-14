@@ -101,24 +101,13 @@ export function ScheduleBoard() {
   }, [])
 
   const fetchCounts = useCallback(async () => {
-    const scopes: DateScope[] = ['today', 'tomorrow', 'week', 'next_week', 'unscheduled', 'ready_to_bill', 'archived']
-    const results = await Promise.all(
-      scopes.map(async (s) => {
-        try {
-          const res = await fetch(`/api/jobs?scope=${s}`)
-          if (res.ok) {
-            const json = await res.json()
-            return { scope: s, count: json.count ?? (json.data?.length ?? 0) }
-          }
-        } catch {}
-        return { scope: s, count: 0 }
-      })
-    )
-    const c: ScopeCounts = { today: 0, tomorrow: 0, week: 0, next_week: 0, unscheduled: 0, ready_to_bill: 0, archived: 0 }
-    for (const r of results) {
-      c[r.scope] = r.count
-    }
-    setCounts(c)
+    try {
+      const res = await fetch('/api/jobs/counts')
+      if (res.ok) {
+        const c: ScopeCounts = await res.json()
+        setCounts(c)
+      }
+    } catch {}
   }, [])
 
   useEffect(() => {

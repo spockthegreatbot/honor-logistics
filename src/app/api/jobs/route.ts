@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
         query = query.is('scheduled_date', null)
         query = query.eq('archived', false)
         query = query.not('status', 'in', '(done,complete,invoiced,cancelled)')
+        query = query.neq('job_type', 'runup') // Run-ups live on their own page
         break
       case 'ready-to-bill':
       case 'ready_to_bill':
@@ -112,7 +113,9 @@ export async function GET(request: NextRequest) {
 
   const { data, error, count } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ data: data ?? [], count })
+  const res = NextResponse.json({ data: data ?? [], count })
+  res.headers.set('Cache-Control', 'private, max-age=5')
+  return res
 }
 
 export async function POST(request: Request) {
