@@ -220,6 +220,25 @@ export async function POST(request: Request) {
       }
     }
 
+    // Auto-attach to open billing cycle for this client
+    if (job && client_id) {
+      const { data: openCycle } = await supabase
+        .from('billing_cycles')
+        .select('id')
+        .eq('client_id', client_id)
+        .eq('status', 'open')
+        .order('period_start', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (openCycle?.id) {
+        await supabase
+          .from('jobs')
+          .update({ billing_cycle_id: openCycle.id })
+          .eq('id', job.id)
+      }
+    }
+
     // Send Telegram alert for new job
     if (job) {
       const { data: details } = await supabase

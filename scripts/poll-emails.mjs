@@ -593,6 +593,23 @@ async function createMitronicsJob(body, subject, fromEmail, fromName) {
     }).select('id, job_number').single()
 
     if (error) throw error
+
+    // Auto-attach to open billing cycle
+    if (newJob?.id && clientId) {
+      const { data: openCycle } = await supabase
+        .from('billing_cycles')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('status', 'open')
+        .order('period_start', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (openCycle?.id) {
+        await supabase.from('jobs').update({ billing_cycle_id: openCycle.id }).eq('id', newJob.id)
+        console.log(`  📎 Auto-attached to billing cycle ${openCycle.id}`)
+      }
+    }
+
     return { ...newJob, duplicate: false }
   } catch (e) {
     console.error('  ❌ Mitronics create error:', e.message)
@@ -727,6 +744,23 @@ async function createJobFromEmail(body, subject, docx = null) {
     }).select('id, job_number').single()
 
     if (error) throw error
+
+    // Auto-attach to open billing cycle
+    if (newJob?.id && clientId) {
+      const { data: openCycle } = await supabase
+        .from('billing_cycles')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('status', 'open')
+        .order('period_start', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (openCycle?.id) {
+        await supabase.from('jobs').update({ billing_cycle_id: openCycle.id }).eq('id', newJob.id)
+        console.log(`  📎 Auto-attached to billing cycle ${openCycle.id}`)
+      }
+    }
+
     return { ...newJob, duplicate: false }
   } catch (e) {
     console.error('  ❌ Create error:', e.message)
@@ -789,6 +823,23 @@ async function createAxusJob(axusData, pdfFilename, pdfBuffer, ediBuffer, ediFil
   }).select('id, job_number').single()
 
   if (error) throw error
+
+  // Auto-attach to open billing cycle
+  if (newJob?.id && axusClientId) {
+    const { data: openCycle } = await supabase
+      .from('billing_cycles')
+      .select('id')
+      .eq('client_id', axusClientId)
+      .eq('status', 'open')
+      .order('period_start', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (openCycle?.id) {
+      await supabase.from('jobs').update({ billing_cycle_id: openCycle.id }).eq('id', newJob.id)
+      console.log(`  📎 Auto-attached to billing cycle ${openCycle.id}`)
+    }
+  }
+
   return { ...newJob, axusData, labelUrl, duplicate: false }
 }
 

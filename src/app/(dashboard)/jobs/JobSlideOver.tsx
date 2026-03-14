@@ -55,6 +55,7 @@ interface Job {
   end_customer_id: string | null
   assigned_to: string | null
   client_reference: string | null
+  billing_cycle_id?: string | null
   parent_job_id: string | null
   created_at: string | null
   updated_at: string | null
@@ -157,6 +158,8 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated, onDelete }: Props) 
   const [hasAod, setHasAod] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [billingLinking, setBillingLinking] = useState(false)
+  const [billingLinkMsg, setBillingLinkMsg] = useState<string | null>(null)
 
   const fetchJob = useCallback(async () => {
     try {
@@ -865,6 +868,55 @@ export function JobSlideOver({ jobId, onClose, onJobUpdated, onDelete }: Props) 
                   className="w-full rounded-lg border border-[#2a2d3e] bg-[#0f1117] text-sm text-[#f1f5f9] placeholder:text-[#94a3b8]/60 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
                 />
               </div>
+
+              {/* Link to Billing Cycle */}
+              {!job.billing_cycle_id && job.client_id && (
+                <div className="pt-4 border-t border-[#2a2d3e]">
+                  <div className="flex items-center gap-2 text-amber-400 text-xs mb-2">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>Not linked to billing cycle</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    disabled={billingLinking}
+                    onClick={async () => {
+                      setBillingLinking(true)
+                      setBillingLinkMsg(null)
+                      try {
+                        const cycleRes = await fetch(`/api/billing/open-cycle?client_id=${job.client_id}`)
+                        const { cycle } = await cycleRes.json() as { cycle: { id: string; cycle_name: string } | null }
+                        if (!cycle) {
+                          setBillingLinkMsg('No open billing cycle for this client')
+                          return
+                        }
+                        const patchRes = await fetch(`/api/jobs/${job.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ billing_cycle_id: cycle.id }),
+                        })
+                        if (patchRes.ok) {
+                          const { job: updated } = await patchRes.json() as { job: Job }
+                          setJob(updated)
+                          if (onJobUpdated) onJobUpdated(updated)
+                          setBillingLinkMsg(`✅ Linked to ${cycle.cycle_name}`)
+                        } else {
+                          setBillingLinkMsg('❌ Failed to link')
+                        }
+                      } catch {
+                        setBillingLinkMsg('❌ Network error')
+                      } finally {
+                        setBillingLinking(false)
+                      }
+                    }}
+                  >
+                    {billingLinking ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Link to Current Cycle
+                  </Button>
+                  {billingLinkMsg && <p className="text-xs text-[#94a3b8] mt-1">{billingLinkMsg}</p>}
+                </div>
+              )}
 
               {/* Delete Job */}
               <div className="pt-4 border-t border-[#2a2d3e]">
