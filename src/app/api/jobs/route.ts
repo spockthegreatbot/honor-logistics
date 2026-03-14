@@ -175,11 +175,10 @@ export async function POST(request: Request) {
     // Derive job_type from order_types if it's an EFEX job
     const effectiveJobType = job_type || (order_types?.length > 0 ? order_types[0] : 'delivery')
 
-    // Generate job number: HRL-YYYY-XXXX
+    // Generate job number: HRL-YYYY-XXXXX (timestamp-based, no race condition)
     const now = new Date()
-    const { count: jobCount } = await supabase.from('jobs').select('*', { count: 'exact', head: true })
-    const seq = String((jobCount ?? 0) + 1).padStart(4, '0')
-    const jobNumber = `HRL-${now.getFullYear()}-${seq}`
+    const ts = now.getTime().toString(36).toUpperCase().slice(-5)
+    const jobNumber = `HRL-${now.getFullYear()}-${ts}`
 
     // Duplicate detection by job_number
     const { data: existingByNumber } = await supabase
