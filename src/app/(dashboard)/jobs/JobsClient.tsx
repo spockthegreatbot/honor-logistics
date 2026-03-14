@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, LayoutGrid, List, Filter } from 'lucide-react'
+import { Plus, LayoutGrid, List, Filter, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { KanbanBoard } from './KanbanBoard'
 import { JobSlideOver } from './JobSlideOver'
@@ -73,7 +73,8 @@ interface Props {
 export function JobsClient({ initialJobs, count }: Props) {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [view, setView] = useState<'kanban' | 'list'>('kanban')
+  const [view, setView] = useState<'kanban' | 'list' | 'calendar'>('kanban')
+  const [calendarWeekOffset, setCalendarWeekOffset] = useState(0)
   const [jobs, setJobs] = useState<Job[]>(initialJobs)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(
     searchParams.get('job')
@@ -172,6 +173,17 @@ export function JobsClient({ initialJobs, count }: Props) {
               <List className="w-3.5 h-3.5" />
               List
             </button>
+            <button
+              onClick={() => { setView('calendar'); setCalendarWeekOffset(0) }}
+              className={`px-3 py-1.5 flex items-center gap-1.5 text-xs font-medium transition ${
+                view === 'calendar'
+                  ? 'bg-[#2a2d3e] text-[#f1f5f9]'
+                  : 'text-[#94a3b8] hover:text-[#f1f5f9]'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              Calendar
+            </button>
           </div>
           <a
             href="/api/export/jobs"
@@ -264,7 +276,150 @@ export function JobsClient({ initialJobs, count }: Props) {
       </div>
 
       {/* Views */}
-      {view === 'kanban' ? (
+      {view === 'calendar' ? (() => {
+        // Week view calendar
+        const today = new Date()
+        const weekStart = new Date(today)
+        weekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7) + calendarWeekOffset * 7) // Monday
+        const weekDays = Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(weekStart)
+          d.setDate(weekStart.getDate() + i)
+          return d
+        })
+
+        const todayStr = today.toISOString().slice(0, 10)
+
+        const fmt = (d: Date) => d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+        const weekLabel = `${fmt(weekDays[0])} – ${fmt(weekDays[6])}`
+
+        function jobsForDay(day: Date) {
+          const dayStr = day.toISOString().slice(0, 10)
+          return filtered.filter(j => j.scheduled_date === dayStr)
+        }
+
+        const STATUS_COLORS: Record<string, string> = {
+          new: 'bg-blue-400', scheduled: 'bg-blue-400', ready: 'bg-blue-400',
+          in_transit: 'bg-amber-400', dispatched: 'bg-amber-400',
+          complete: 'bg-emerald-400', done: 'bg-emerald-400', delivered: 'bg-emerald-400',
+          invoiced: 'bg-purple-400', cancelled: 'bg-red-400',
+          runup_pending: 'bg-amber-400', runup_complete: 'bg-cyan-400', stored: 'bg-cyan-400',
+        }
+
+        return (
+          <div className="space-y-4">
+            {/* Week navigation */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setCalendarWeekOffset(o => o - 1)}
+                className="p-2 rounded-lg border border-[#2a2d3e] text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e] transition"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm font-semibold text-[#f1f5f9] min-w-[200px] text-center">{weekLabel}</span>
+              <button
+                onClick={() => setCalendarWeekOffset(o => o + 1)}
+                className="p-2 rounded-lg border border-[#2a2d3e] text-[#94a3b8] hover:text-[#f1f5f9] hover:border-[#3a3d4e] transition"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              {calendarWeekOffset !== 0 && (
+                <button
+                  onClick={() => setCalendarWeekOffset(0)}
+                  className="px-3 py-1.5 rounded-lg border border-[#2a2d3e] text-xs font-medium text-[#94a3b8] hover:text-[#f1f5f9] transition"
+                >
+                  Today
+                </button>
+              )}
+            </div>
+
+            {/* Desktop grid */}
+            <div className="hidden md:block rounded-xl border border-[#2a2d3e] overflow-hidden">
+              <div className="grid grid-cols-7 border-b border-[#2a2d3e] bg-[#1a1d27]">
+                {weekDays.map(d => (
+                  <div key={d.toISOString()} className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-[#94a3b8] text-center">
+                    {d.toLocaleDateString('en-AU', { weekday: 'short' })}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 min-h-[400px]">
+                {weekDays.map((day, idx) => {
+                  const dayStr = day.toISOString().slice(0, 10)
+                  const dayJobs = jobsForDay(day)
+                  const isToday = dayStr === todayStr
+                  return (
+                    <div
+                      key={dayStr}
+                      className={`min-h-[120px] p-2 border-r last:border-r-0 border-[#2a2d3e] ${
+                        isToday ? 'bg-orange-500/5' : 'bg-[#1e2130]'
+                      }`}
+                    >
+                      <div className={`text-sm font-semibold mb-2 w-7 h-7 flex items-center justify-center rounded-full ${
+                        isToday ? 'bg-orange-500 text-white' : 'text-[#94a3b8]'
+                      }`}>
+                        {day.getDate()}
+                      </div>
+                      <div className="space-y-1">
+                        {dayJobs.map(job => (
+                          <button
+                            key={job.id}
+                            onClick={() => setSelectedJobId(job.id)}
+                            className="w-full text-left text-xs rounded border border-[#2a2d3e] bg-[#151826] hover:border-[#3a3d4e] px-1.5 py-1 flex items-center gap-1.5 transition truncate"
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_COLORS[job.status ?? 'new'] ?? 'bg-[#94a3b8]'}`} />
+                            <span className="font-bold text-[#f97316]">#{String(job.job_number ?? job.id).slice(-6)}</span>
+                            <span className="text-[#94a3b8] truncate">{job.end_customers?.name ?? job.clients?.name ?? ''}</span>
+                          </button>
+                        ))}
+                        {dayJobs.length === 0 && <span className="text-xs text-[#94a3b8]/30">—</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Mobile stacked */}
+            <div className="md:hidden space-y-3">
+              {weekDays.map(day => {
+                const dayStr = day.toISOString().slice(0, 10)
+                const dayJobs = jobsForDay(day)
+                const isToday = dayStr === todayStr
+                return (
+                  <div key={dayStr} className={`rounded-xl border ${isToday ? 'border-orange-500/40 bg-orange-500/5' : 'border-[#2a2d3e] bg-[#1e2130]'}`}>
+                    <div className="px-3 py-2 border-b border-[#2a2d3e] flex items-center gap-2">
+                      <span className={`text-sm font-bold ${isToday ? 'text-orange-400' : 'text-[#f1f5f9]'}`}>
+                        {day.toLocaleDateString('en-AU', { weekday: 'short' })}
+                      </span>
+                      <span className={`text-xs ${isToday ? 'text-orange-300' : 'text-[#94a3b8]'}`}>
+                        {day.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                      </span>
+                      {isToday && <span className="ml-auto text-xs text-orange-400 font-medium">Today</span>}
+                      {dayJobs.length > 0 && <span className="ml-auto text-xs text-[#94a3b8]">{dayJobs.length}</span>}
+                    </div>
+                    {dayJobs.length > 0 ? (
+                      <div className="p-2 space-y-1.5">
+                        {dayJobs.map(job => (
+                          <button
+                            key={job.id}
+                            onClick={() => setSelectedJobId(job.id)}
+                            className="w-full text-left rounded-lg border border-[#2a2d3e] bg-[#151826] px-3 py-2 flex items-center gap-2 hover:border-[#3a3d4e] transition"
+                          >
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_COLORS[job.status ?? 'new'] ?? 'bg-[#94a3b8]'}`} />
+                            <span className="text-xs font-bold text-[#f97316]">#{String(job.job_number ?? job.id).slice(-6)}</span>
+                            <span className="text-xs text-[#94a3b8] flex-1 truncate">{job.end_customers?.name ?? job.clients?.name ?? ''}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="px-3 py-2 text-xs text-[#94a3b8]/40">No jobs</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })() : view === 'kanban' ? (
         <KanbanBoard
           initialJobs={filtered}
           onJobClick={(id) => setSelectedJobId(id)}
