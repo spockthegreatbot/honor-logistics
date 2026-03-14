@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Phone, AlertTriangle, ChevronDown, ChevronUp, PenLine, CheckCircle2 } from 'lucide-react'
+// AlertTriangle kept for missing-data states only
 import { cn, formatDateTime } from '@/lib/utils'
 import { StatusBar } from '../StatusBar'
 
@@ -61,13 +62,6 @@ function isCollectionType(job: Job): boolean {
   return types.includes('collection') || types.includes('pickup')
 }
 
-function isOverdue(job: Job): boolean {
-  if (!job.scheduled_date) return false
-  const today = new Date().toISOString().slice(0, 10)
-  const status = job.status ?? ''
-  return job.scheduled_date < today && !['complete', 'done', 'invoiced', 'cancelled'].includes(status)
-}
-
 interface EFEXJobCardProps {
   job: Job
   onClick: (id: string) => void
@@ -84,7 +78,6 @@ export function EFEXJobCard({ job, onClick, onStatusChange, onAodClick }: EFEXJo
   const accessories = job.machine_accessories
     ? job.machine_accessories.split(',').map(a => a.trim()).filter(Boolean)
     : []
-  const overdue = isOverdue(job)
 
   const showAodButton = job.has_aod && !job.signed_aod_at
   const showAodSigned = job.has_aod && job.signed_aod_at
@@ -104,12 +97,6 @@ export function EFEXJobCard({ job, onClick, onStatusChange, onAodClick }: EFEXJo
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border border-[#2a2d3e] text-[#94a3b8]">
               {getJobTypeLabel(job)}
             </span>
-            {overdue && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">
-                <AlertTriangle className="w-3 h-3" />
-                Overdue
-              </span>
-            )}
           </div>
           <span className="text-[11px] font-mono text-[#6b7280]">
             {job.job_number ? `#${job.job_number.replace('HRL-', '')}` : ''}

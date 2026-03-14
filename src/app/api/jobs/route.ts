@@ -41,12 +41,15 @@ export async function GET(request: NextRequest) {
     const tomorrowStr = addDays(now, 1)
 
     switch (scope) {
-      case 'today':
-        // Jobs scheduled today OR overdue (past date, not done/invoiced) OR in_transit
-        query = query.or(`scheduled_date.eq.${todayStr},scheduled_date.lt.${todayStr},status.eq.in_transit`)
-        query = query.not('status', 'in', '(complete,invoiced,cancelled)')
+      case 'today': {
+        // Today's jobs + past 2 days grace window (unfinished) + in_transit
+        const grace2 = addDays(now, -2)
+        query = query.or(`scheduled_date.gte.${grace2},status.eq.in_transit`)
+        query = query.lte('scheduled_date', todayStr)
+        query = query.not('status', 'in', '(complete,done,invoiced,cancelled)')
         query = query.eq('archived', false)
         break
+      }
       case 'tomorrow':
         query = query.eq('scheduled_date', tomorrowStr)
         query = query.not('status', 'in', '(complete,invoiced,cancelled)')
