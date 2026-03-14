@@ -60,8 +60,8 @@ export async function GET() {
       counts.archived++
     }
 
-    // Ready to bill: completed + no billing cycle (regardless of archived)
-    if (completedStatuses.has(s) && !billingCycleId) {
+    // Ready to bill: unbilled non-toner jobs (any status except cancelled)
+    if (!billingCycleId && s !== 'cancelled' && jobType !== 'toner') {
       counts.ready_to_bill++
     }
 

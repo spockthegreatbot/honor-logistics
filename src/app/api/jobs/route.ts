@@ -82,10 +82,12 @@ export async function GET(request: NextRequest) {
         break
       case 'ready-to-bill':
       case 'ready_to_bill':
-        // Include ALL completed jobs regardless of archived flag
+        // Include ALL unbilled jobs regardless of archived flag or status
         // Archived just means "off active board", not "already billed"
-        query = query.in('status', ['done', 'delivered', 'complete'])
+        // Many jobs stay as dispatched/new but are still billable work
         query = query.is('billing_cycle_id', null)
+        query = query.not('status', 'in', '(cancelled)')
+        query = query.neq('job_type', 'toner')
         break
       case 'archived':
         query = query.eq('archived', true)
