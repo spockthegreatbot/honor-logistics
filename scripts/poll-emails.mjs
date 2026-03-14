@@ -841,7 +841,7 @@ async function createAxusJob(axusData, pdfFilename, pdfBuffer, ediBuffer, ediFil
   ].filter(Boolean).join('\n')
 
   const { data: newJob, error } = await supabase.from('jobs').insert({
-    job_number: jobNumber, job_type: axusData.jobType || 'toner', order_types: [axusData.jobType || 'toner'],
+    job_number: jobNumber, job_type: 'toner', order_types: ['toner'],
     status: "dispatched", client_id: axusClientId, end_customer_id: endCustomerId,
     contact_name: axusData.shipToAttn || null, contact_phone: axusData.shipToPhone || null,
     scheduled_date: axusData.dateDue, address_to: axusData.shipToAddress || null,
@@ -1008,6 +1008,24 @@ async function run() {
 
           const jobNumber = customerPO ? `RUNUP-WH-${customerPO}` : `RUNUP-WH-${Date.now()}`
 
+          // Dedup: check job_number or po_number before insert
+          const { data: existingByJobNum } = await supabase.from('jobs')
+            .select('id, job_number').eq('job_number', jobNumber).maybeSingle()
+          if (existingByJobNum) {
+            console.log(`  ⚠️  Duplicate warehouse run-up — already exists as ${existingByJobNum.job_number}`)
+            uidsToMark.push(uid)
+            continue
+          }
+          if (customerPO) {
+            const { data: existingByPO } = await supabase.from('jobs')
+              .select('id, job_number').eq('po_number', customerPO).eq('job_type', 'runup').maybeSingle()
+            if (existingByPO) {
+              console.log(`  ⚠️  Duplicate warehouse run-up by PO — already exists as ${existingByPO.job_number}`)
+              uidsToMark.push(uid)
+              continue
+            }
+          }
+
           const noteLines = [
             'Warehouse scan — run-up job',
             `Shipment ID: ${packingData.shipmentId || 'N/A'}`,
@@ -1021,6 +1039,7 @@ async function run() {
             job_number: jobNumber,
             job_type: 'runup',
             status: 'new',
+            client_id: 'e35458d3-eef4-41cc-8be7-e9d331a657d3', // EFEX
             machine_model: machineModel,
             serial_number: serialNumber,
             po_number: customerPO,
@@ -1051,6 +1070,7 @@ async function run() {
             job_number: jobNumber,
             job_type: 'runup',
             status: 'runup_pending',
+            client_id: 'e35458d3-eef4-41cc-8be7-e9d331a657d3', // EFEX
             install_pdf_url: pdfUrl,
             notes: 'Warehouse scan — manual review required',
           }).select('id, job_number').single()
@@ -1217,6 +1237,7 @@ async function run() {
           job_number: runup.jobNumber,
           job_type: 'runup',
           status: 'new',
+          client_id: 'e35458d3-eef4-41cc-8be7-e9d331a657d3', // EFEX
           contact_name: runup.customerName,
           address_to: runup.city || null,
           notes: noteLines.join('\n'),
