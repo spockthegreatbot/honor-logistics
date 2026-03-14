@@ -309,12 +309,20 @@ function parseEfexForm({ raw, html }, subject = '') {
     return m?.[1] ?? null
   })()
 
+  // Phone validation: Australian phone pattern
+  const auPhoneRe = /^(\+?61|0)[0-9\s\-\(\)]{7,14}$/
+  const cleanedPhone = cleanVal(contactPhone?.replace(/\s+/g, ' ').slice(0, 20))
+  const validPhone = (cleanedPhone && auPhoneRe.test(cleanedPhone.trim())) ? cleanedPhone : null
+
+  // Contact name cleanup: trim trailing dashes
+  const cleanedContactName = cleanVal(contactName?.slice(0, 80))?.replace(/[\s]*[–—-]+[\s]*$/, '').trim() || null
+
   return {
     customerName: cleanVal(customerName?.slice(0, 120)),
     orderTypes,
     scheduledDate,
-    contactName: cleanVal(contactName?.slice(0, 80)),
-    contactPhone: cleanVal(contactPhone?.replace(/\s+/g, ' ').slice(0, 20)),
+    contactName: cleanedContactName,
+    contactPhone: validPhone,
     machineModel: cleanVal(machineModel?.slice(0, 100)),
     machineSerial: cleanVal(machineSerial?.slice(0, 50)),
     machineAccessories: cleanVal(machineAccessories?.slice(0, 100)),
@@ -604,13 +612,31 @@ async function createJobFromEmail(body, subject, docx = null) {
     const orderTypes = (d.orderTypes?.length > 0) ? d.orderTypes : detectOrderTypes(combined)
     const jobType = ORDER_TYPE_MAP[orderTypes[0]] ?? 'delivery'
     const ref = d.efexRef ?? extractEfexReference(combined)
-    const contactName = d.contactName ?? extractField(combined, 'contact', 'best contact', 'contact person', 'attn')
-    const contactPhone = d.contactPhone ?? extractField(combined, 'phone', 'mobile', 'tel', 'contact number')
+    let contactName = d.contactName ?? extractField(combined, 'contact', 'best contact', 'contact person', 'attn')
+    // Clean trailing dashes from contact name
+    if (contactName) contactName = contactName.replace(/[\s]*[–—-]+[\s]*$/, '').trim() || null
+
+    let contactPhone = d.contactPhone ?? extractField(combined, 'phone', 'mobile', 'tel', 'contact number')
+    // Validate Australian phone format — reject garbage text
+    const auPhonePattern = /^(\+?61|0)[0-9\s\-\(\)]{7,14}$/
+    if (contactPhone && !auPhonePattern.test(contactPhone.trim())) contactPhone = null
     const scheduledDate = d.scheduledDate ?? extractDate(subject) ?? extractDate(combined)
     const scheduledTime = extractField(combined, 'time', 'delivery time', 'arrival time')
     const machineSerial = cleanVal(d.machineSerial ?? extractField(combined, 'serial', 's/n', 'serial number'))
     const machineAccessories = cleanVal(d.machineAccessories) ?? null
-    const addressTo = d.address ?? extractField(combined, 'delivery address', 'address', 'site address')
+    let addressTo = d.address ?? extractField(combined, 'delivery address', 'address', 'site address')
+    // Address fallback: scan email body for lines with a state abbreviation + postcode
+    if (!addressTo) {
+      const statePostcodeRe = /^(.+(?:NSW|VIC|QLD|WA|SA|ACT|TAS|NT)\s*\d{4}.*)$/im
+      const lines = combined.split('\n')
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed.length > 5 && trimmed.length < 200 && statePostcodeRe.test(trimmed)) {
+          addressTo = cleanVal(trimmed.slice(0, 200))
+          break
+        }
+      }
+    }
     const addressFrom = (orderTypes.includes('relocation') ? d.addressFrom ?? extractField(combined, 'collect from', 'pickup from') : null)
     const specialInstructions = d.specialInstructions ?? extractField(combined, 'special instructions', 'comments')
     const stairWalker = d.stairWalker ?? null
