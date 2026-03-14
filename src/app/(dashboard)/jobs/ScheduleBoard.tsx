@@ -12,6 +12,7 @@ import { NewJobSlideOver } from './NewJobSlideOver'
 
 interface Job {
   id: string
+  client_id?: string | null
   job_number: string | null
   job_type: string
   order_types?: string[] | null
@@ -172,7 +173,7 @@ export function ScheduleBoard() {
     for (const job of sortedJobs) {
       const clientName = job.clients?.name ?? 'Unknown Client'
       const clientColor = job.clients?.color_code ?? '#6b7280'
-      const clientId = clientName // Group by name since we don't have client_id on the frontend job
+      const clientId = job.client_id ?? clientName
       if (!groups.has(clientId)) {
         groups.set(clientId, { clientName, clientColor, clientId, jobs: [] })
       }
@@ -205,7 +206,14 @@ export function ScheduleBoard() {
 
   async function handleBulkInvoice() {
     if (selectedBillJobs.size === 0) return
-    router.push('/billing/generate')
+    const jobIds = Array.from(selectedBillJobs)
+    const firstJob = jobs.find(j => selectedBillJobs.has(j.id))
+    const clientId = firstJob?.client_id
+
+    const params = new URLSearchParams()
+    if (clientId) params.set('client', clientId)
+    params.set('jobs', jobIds.join(','))
+    router.push(`/billing/generate?${params.toString()}`)
   }
 
   function toggleBulkSelect(jobId: string) {
@@ -278,7 +286,12 @@ export function ScheduleBoard() {
       <main className="flex-1 overflow-y-auto">
         {/* Scope header */}
         <div className="sticky top-0 z-10 bg-[#0f1117]/95 backdrop-blur-sm border-b border-[#2a2d3e] px-4 md:px-6 py-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[#f1f5f9]">{getScopeLabel(scope)}</h2>
+          <div>
+            <h2 className="text-lg font-bold text-[#f1f5f9]">{getScopeLabel(scope)}</h2>
+            {scope === 'ready_to_bill' && (
+              <p className="text-xs text-[#94a3b8] mt-0.5">Select jobs to include in the next invoice</p>
+            )}
+          </div>
           {scope !== 'ready_to_bill' && sortedJobs.length > 0 && (
             <button
               onClick={() => { setBulkMode(!bulkMode); setBulkSelected(new Set()) }}

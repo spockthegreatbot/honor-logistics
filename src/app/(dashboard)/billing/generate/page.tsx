@@ -10,7 +10,8 @@ interface ClientWithStats {
   last_cycle_end: string | null
 }
 
-export default async function GenerateInvoicePage() {
+export default async function GenerateInvoicePage({ searchParams }: { searchParams: Promise<{ client?: string; jobs?: string }> }) {
+  const sp = await searchParams
   const supabase = await createClient()
 
   // Get billing clients
@@ -54,5 +55,11 @@ export default async function GenerateInvoicePage() {
     })
   )
 
-  return <InvoiceBuilder clients={clientStats} />
+  return (
+    <InvoiceBuilder
+      clients={clientStats}
+      initialClientId={sp.client}
+      initialJobIds={sp.jobs?.split(',')}
+    />
+  )
 }

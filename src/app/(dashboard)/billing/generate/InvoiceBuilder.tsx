@@ -64,6 +64,8 @@ interface LineItem {
 
 interface Props {
   clients: ClientWithStats[]
+  initialClientId?: string
+  initialJobIds?: string[]
 }
 
 /* ── helpers ───────────────────────────────────────────────── */
@@ -89,11 +91,13 @@ function sheetTypeFromJobType(jt: string | null): string {
 
 /* ── Component ─────────────────────────────────────────────── */
 
-export default function InvoiceBuilder({ clients }: Props) {
+export default function InvoiceBuilder({ clients, initialClientId, initialJobIds }: Props) {
   const router = useRouter()
 
   /* Step 1: Client selection */
   const [selectedClient, setSelectedClient] = useState<ClientWithStats | null>(null)
+  const [fromBoard, setFromBoard] = useState(false)
+  const [boardJobCount, setBoardJobCount] = useState(0)
 
   /* Step 2: Builder state */
   const [loading, setLoading] = useState(false)
@@ -157,6 +161,33 @@ export default function InvoiceBuilder({ clients }: Props) {
     d.setDate(d.getDate() + n)
     return d.toISOString().slice(0, 10)
   }
+
+  /* Auto-select client from URL params (coming from Schedule Board) */
+  const [autoSelectDone, setAutoSelectDone] = useState(false)
+  useEffect(() => {
+    if (autoSelectDone || !initialClientId) return
+    const client = clients.find(c => c.id === initialClientId)
+    if (client) {
+      setAutoSelectDone(true)
+      if (initialJobIds?.length) {
+        setFromBoard(true)
+        setBoardJobCount(initialJobIds.length)
+      }
+      handleSelectClient(client)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialClientId, clients])
+
+  /* When jobs load from board selection, pre-select only the specified jobs */
+  useEffect(() => {
+    if (!fromBoard || !initialJobIds?.length || lineItems.length === 0) return
+    setLineItems(prev => prev.map(item => ({
+      ...item,
+      selected: item.job_id ? initialJobIds.includes(item.job_id) : item.selected,
+    })))
+    setFromBoard(false) // Only apply once
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineItems.length, fromBoard])
 
   /* Refetch when dates change */
   function handleDateChange(field: 'start' | 'end', value: string) {
@@ -400,7 +431,7 @@ export default function InvoiceBuilder({ clients }: Props) {
           <div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full" style={{ backgroundColor: clientColor }} />
-              <h1 className="text-2xl font-bold text-[#f1f5f9]">{selectedClient.name}</h1>
+              <h1 className="text-2xl font-bold text-[#f1f5f9]">Invoice for {selectedClient.name}</h1>
             </div>
             <p className="text-sm text-[#94a3b8] mt-0.5">
               All jobs from {formatDate(periodStart)} to {formatDate(periodEnd)}
@@ -440,6 +471,14 @@ export default function InvoiceBuilder({ clients }: Props) {
           className="max-w-sm h-8 text-xs"
         />
       </div>
+
+      {/* Board selection banner */}
+      {boardJobCount > 0 && (
+        <div className="flex items-center gap-2 text-sm text-[#f97316] bg-[#f97316]/10 border border-[#f97316]/30 rounded-lg px-3 py-2">
+          <FileCheck className="w-4 h-4 shrink-0" />
+          {boardJobCount} job{boardJobCount !== 1 ? 's' : ''} selected from board
+        </div>
+      )}
 
       {/* Error */}
       {error && (
