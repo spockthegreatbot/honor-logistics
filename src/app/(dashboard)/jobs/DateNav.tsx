@@ -1,9 +1,9 @@
 'use client'
 
-import { Calendar, Clock, CalendarDays, CalendarRange, HelpCircle, Archive, FileCheck } from 'lucide-react'
+import { Calendar, Clock, CalendarDays, CalendarRange, HelpCircle, Archive } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export type DateScope = 'today' | 'tomorrow' | 'week' | 'next_week' | 'unscheduled' | 'ready_to_bill' | 'archived'
+export type DateScope = 'today' | 'tomorrow' | 'week' | 'next_week' | 'unscheduled' | 'archived'
 
 interface ScopeCounts {
   today: number
@@ -11,7 +11,6 @@ interface ScopeCounts {
   week: number
   next_week: number
   unscheduled: number
-  ready_to_bill: number
   archived: number
 }
 
@@ -27,7 +26,6 @@ const SCOPES: { key: DateScope; label: string; icon: React.ElementType }[] = [
   { key: 'week', label: 'This Week', icon: CalendarDays },
   { key: 'next_week', label: 'Next Week', icon: CalendarRange },
   { key: 'unscheduled', label: 'Unscheduled', icon: HelpCircle },
-  { key: 'ready_to_bill', label: 'Ready to Bill', icon: FileCheck },
   { key: 'archived', label: 'Archived', icon: Archive },
 ]
 

@@ -3,6 +3,7 @@ import {
   Briefcase,
   Clock,
   Receipt,
+  FileCheck,
   Package,
   Truck,
   Plus,
@@ -173,7 +174,7 @@ export default async function DashboardPage() {
   let unbilledCount = 0
   let inTransitNow = 0
   let newJobsThisWeek = 0
-  let readyToBillCount = 0
+  let totalUnbilledCount = 0
 
   const clientStats: Record<string, {
     name: string; color: string; openJobs: number; completedJobs: number;
@@ -200,7 +201,7 @@ export default async function DashboardPage() {
     if (doneStatuses.includes(status) && createdAt && createdAt >= sevenDaysAgoStr) completedThisWeek++
     if (createdAt && createdAt >= sevenDaysAgoStr) newJobsThisWeek++
     if (!job.billing_cycle_id && doneStatuses.includes(status) && status !== 'invoiced') unbilledCount++
-    if (!job.billing_cycle_id && status !== 'cancelled') readyToBillCount++
+    if (!job.billing_cycle_id && status !== 'cancelled') totalUnbilledCount++
 
     if (clientName && clientStats[clientName]) {
       const cs = clientStats[clientName]
@@ -244,6 +245,12 @@ export default async function DashboardPage() {
               Close Billing
             </Link>
           </Button>
+          <Button size="sm" className="bg-[#f97316] text-[#0f1117] hover:bg-[#ea580c]" asChild>
+            <Link href="/billing/generate">
+              <FileCheck className="w-4 h-4" />
+              Generate Invoice
+            </Link>
+          </Button>
           <Button size="sm" asChild>
             <Link href="/jobs?new=1">
               <Plus className="w-4 h-4" />
@@ -273,7 +280,7 @@ export default async function DashboardPage() {
           value={unbilledCount}
           icon={DollarSign}
           iconColor="text-amber-400"
-          sub={`${readyToBillCount} total ready`}
+          sub={`${totalUnbilledCount} total unbilled`}
         />
         <StatCard
           label="In Transit Now"
@@ -321,9 +328,9 @@ export default async function DashboardPage() {
             <p className="text-2xl font-bold text-blue-400 mt-1 tabular-nums">{newJobsThisWeek}</p>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#6b7280]">Ready to Bill</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#6b7280]">Unbilled Jobs</p>
             <p className="text-2xl font-bold text-amber-400 mt-1 tabular-nums">{unbilledCount}</p>
-            <p className="text-xs text-[#94a3b8] mt-0.5">unbilled completed jobs</p>
+            <p className="text-xs text-[#94a3b8] mt-0.5">completed, awaiting invoice</p>
           </div>
         </div>
       </div>

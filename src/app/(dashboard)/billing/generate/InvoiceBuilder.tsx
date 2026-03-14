@@ -352,7 +352,7 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
           <div>
             <h1 className="text-2xl font-bold text-[#f1f5f9]">Generate Invoice</h1>
             <p className="text-sm text-[#94a3b8] mt-0.5">
-              Select a client to build an invoice from their completed jobs.
+              Select a client to review and invoice their completed jobs
             </p>
           </div>
         </div>
@@ -380,7 +380,7 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
 
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-[#94a3b8]">Ready to bill</span>
+                      <span className="text-[#94a3b8]">Unbilled jobs</span>
                       <span
                         className="font-bold px-2 py-0.5 rounded-full text-xs"
                         style={{

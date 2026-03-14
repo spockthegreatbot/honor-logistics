@@ -36,7 +36,7 @@ export async function GET() {
   let unbilledAmount = 0
   let inTransitNow = 0
   let newJobsThisWeek = 0
-  let readyToBillCount = 0
+  let totalUnbilledCount = 0
 
   // Per-client stats
   const clientStats: Record<string, {
@@ -95,9 +95,9 @@ export async function GET() {
       unbilledAmount++
     }
 
-    // Ready to bill
+    // Total unbilled
     if (!job.billing_cycle_id && status !== 'cancelled') {
-      readyToBillCount++
+      totalUnbilledCount++
     }
 
     // Per-client
@@ -130,7 +130,7 @@ export async function GET() {
       unbilledAmount,
       inTransitNow,
       newJobsThisWeek,
-      readyToBillCount,
+      totalUnbilledCount,
     },
     clients: Object.values(clientStats),
   })

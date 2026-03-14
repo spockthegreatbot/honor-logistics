@@ -80,15 +80,6 @@ export async function GET(request: NextRequest) {
         query = query.not('status', 'in', '(done,complete,invoiced,cancelled)')
         query = query.neq('job_type', 'runup') // Run-ups live on their own page
         break
-      case 'ready-to-bill':
-      case 'ready_to_bill':
-        // Include ALL unbilled jobs regardless of archived flag or status
-        // Archived just means "off active board", not "already billed"
-        // Many jobs stay as dispatched/new but are still billable work
-        query = query.is('billing_cycle_id', null)
-        query = query.not('status', 'in', '(cancelled)')
-        query = query.neq('job_type', 'toner')
-        break
       case 'archived':
         query = query.eq('archived', true)
         query = query.order('scheduled_date', { ascending: false })

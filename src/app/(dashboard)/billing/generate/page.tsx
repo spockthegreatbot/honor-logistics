@@ -27,13 +27,14 @@ export default async function GenerateInvoicePage({ searchParams }: { searchPara
   // For each client, get count of un-invoiced jobs and last billing cycle end date
   const clientStats: ClientWithStats[] = await Promise.all(
     billingClients.map(async (client) => {
-      // Count jobs not in a billing cycle with billable statuses
+      // Count all unbilled jobs (any status except cancelled, exclude toner)
       const { count: readyCount } = await supabase
         .from('jobs')
         .select('id', { count: 'exact', head: true })
         .eq('client_id', client.id)
         .is('billing_cycle_id', null)
-        .in('status', ['done', 'delivered', 'complete', 'scheduled', 'ready', 'dispatched', 'in_transit', 'runup_complete'])
+        .not('status', 'in', '(cancelled)')
+        .neq('job_type', 'toner')
 
       // Get last billing cycle end date
       const { data: lastCycle } = await supabase

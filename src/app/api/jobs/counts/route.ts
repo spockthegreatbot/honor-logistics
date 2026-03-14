@@ -34,7 +34,6 @@ export async function GET() {
   const nwEnd = addDays(now, 14)
 
   const doneStatuses = new Set(['complete', 'done', 'invoiced', 'cancelled'])
-  const completedStatuses = new Set(['done', 'delivered', 'complete'])
   const todayExclude = new Set(['complete', 'done', 'invoiced', 'cancelled'])
   const tomorrowExclude = new Set(['complete', 'invoiced', 'cancelled'])
 
@@ -44,7 +43,6 @@ export async function GET() {
     week: 0,
     next_week: 0,
     unscheduled: 0,
-    ready_to_bill: 0,
     archived: 0,
   }
 
@@ -52,17 +50,11 @@ export async function GET() {
     const s = job.status ?? 'new'
     const sd = job.scheduled_date as string | null
     const archived = job.archived as boolean
-    const billingCycleId = job.billing_cycle_id as string | null
     const jobType = job.job_type as string
 
     // Archived count
     if (archived) {
       counts.archived++
-    }
-
-    // Ready to bill: unbilled non-toner jobs (any status except cancelled)
-    if (!billingCycleId && s !== 'cancelled' && jobType !== 'toner') {
-      counts.ready_to_bill++
     }
 
     // Skip archived for remaining scopes

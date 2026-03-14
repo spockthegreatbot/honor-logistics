@@ -36,8 +36,10 @@ export async function GET(request: NextRequest) {
     .eq('client_id', clientId)
     // Not already in a billing cycle
     .is('billing_cycle_id', null)
-    // Include all actionable statuses — Onur decides what to bill
-    .in('status', ['done', 'delivered', 'complete', 'scheduled', 'ready', 'dispatched', 'in_transit', 'runup_complete'])
+    // Include ALL statuses except cancelled — Onur decides what to bill
+    .not('status', 'in', '(cancelled)')
+    // Exclude toner jobs (billed separately)
+    .neq('job_type', 'toner')
     .order('scheduled_date', { ascending: true, nullsFirst: false })
 
   // Date range filter
