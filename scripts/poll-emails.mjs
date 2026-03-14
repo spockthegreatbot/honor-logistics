@@ -957,6 +957,7 @@ async function run() {
           .maybeSingle()
         if (existingWh) {
           console.log(`  ⚠️  Duplicate warehouse scan — already exists as ${existingWh.job_number}`)
+          await sendTelegram(`⚠️ <b>Duplicate detected:</b> Warehouse scan #${existingWh.job_number} already exists — skipped`)
           uidsToMark.push(uid)
           continue
         }
@@ -1013,6 +1014,7 @@ async function run() {
             .select('id, job_number').eq('job_number', jobNumber).maybeSingle()
           if (existingByJobNum) {
             console.log(`  ⚠️  Duplicate warehouse run-up — already exists as ${existingByJobNum.job_number}`)
+            await sendTelegram(`⚠️ <b>Duplicate detected:</b> Warehouse run-up #${existingByJobNum.job_number} already exists — skipped`)
             uidsToMark.push(uid)
             continue
           }
@@ -1021,6 +1023,7 @@ async function run() {
               .select('id, job_number').eq('po_number', customerPO).eq('job_type', 'runup').maybeSingle()
             if (existingByPO) {
               console.log(`  ⚠️  Duplicate warehouse run-up by PO — already exists as ${existingByPO.job_number}`)
+              await sendTelegram(`⚠️ <b>Duplicate detected:</b> Warehouse run-up #${existingByPO.job_number} (PO: ${customerPO}) already exists — skipped`)
               uidsToMark.push(uid)
               continue
             }
@@ -1121,6 +1124,7 @@ async function run() {
 
           if (result.duplicate) {
             console.log(`  ⚠️  Duplicate — already exists as ${result.job_number}`)
+            await sendTelegram(`⚠️ <b>Duplicate detected:</b> AXUS Job #${result.job_number} already exists — skipped`)
           } else {
             console.log(`  ✅ Created AXUS job ${result.job_number}`)
             const lineItemsMsg = axusData.lineItems.map(li => `${li.description} x${li.qty}`).join(', ')
@@ -1163,6 +1167,7 @@ async function run() {
         .select('id, job_number').eq('job_number', runup.jobNumber).maybeSingle()
       if (existingRunup) {
         console.log(`  ⚠️  Duplicate run-up — already exists as ${existingRunup.job_number}`)
+        await sendTelegram(`⚠️ <b>Duplicate detected:</b> Run-Up Job #${existingRunup.job_number} already exists — skipped`)
       } else {
         // Parse PDF attachment if present (Kyocera packing list)
         const pdfAttach = attachments.find(a => a.contentType === 'application/pdf')
@@ -1285,6 +1290,7 @@ async function run() {
         )
       } else if (result?.duplicate) {
         console.log(`  ⚠️  Duplicate skipped`)
+        await sendTelegram(`⚠️ <b>Duplicate detected:</b> Mitronics Job #${result.job_number} already exists — skipped`)
       }
       uidsToMark.push(uid)
       continue
@@ -1380,6 +1386,7 @@ async function run() {
         )
       } else if (result?.duplicate) {
         console.log(`  ⚠️  Duplicate skipped`)
+        await sendTelegram(`⚠️ <b>Duplicate detected:</b> EFEX Job #${result.job_number} already exists — skipped`)
       }
     } else {
       console.log(`  ℹ️  Not a job request — logged only`)
