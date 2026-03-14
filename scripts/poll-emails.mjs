@@ -34,16 +34,10 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
  */
 async function parsePackingListFromPdf(pdfBuffer) {
   try {
-    const parser = new PDFParse()
-    const result = await parser.loadPDF(pdfBuffer)
-    const pages = []
-    for (let i = 0; i < result.numPages; i++) {
-      const page = await result.getPage(i + 1)
-      const textContent = await page.getTextContent()
-      const text = textContent.items.map(item => item.str).join(' ')
-      pages.push(text)
-    }
-    const fullText = pages.join('\n')
+    const parser = new PDFParse({ data: pdfBuffer })
+    const result = await parser.getText()
+    const fullText = result.text ?? ''
+    if (!fullText.trim()) return null
     return parsePackingListText(fullText)
   } catch (e) {
     console.error('  PDF text extraction error:', e.message)
@@ -837,6 +831,145 @@ async function run() {
 
     console.log(`\n📧 From: ${fromName} <${from}>`)
     console.log(`   Subject: ${subject}`)
+
+    // ── Skip remittance / payment advice emails — not job requests ─────────────
+    if (/remittance|payment advice|eft:/i.test(subject) || /^accountspayable@/i.test(from)) {
+      console.log(`  ℹ️  Remittance/payment email — skipping`)
+      uidsToMark.push(uid)
+      continue
+    }
+
+    // ── Warehouse scan handling (Kyocera packing list PDFs) ────────────────────
+    if (from.toLowerCase() === 'warehouse@honorremovals.com.au') {
+      const whPdf = attachments.find(a => a.contentType === 'application/pdf')
+      if (whPdf) {
+        console.log(`  📦 Warehouse scan PDF: ${whPdf.filename}`)
+
+        // Dedup: check if we already have a job with this PDF filename
+        const { data: existingWh } = await supabase.from('jobs')
+          .select('id, job_number')
+          .ilike('install_pdf_url', `%${whPdf.filename}%`)
+          .maybeSingle()
+        if (existingWh) {
+          console.log(`  ⚠️  Duplicate warehouse scan — already exists as ${existingWh.job_number}`)
+          uidsToMark.push(uid)
+          continue
+        }
+
+        let packingData = null
+        try {
+          packingData = await parsePackingListFromPdf(whPdf.content)
+          if (packingData) {
+            console.log(`  📦 Parsed packing list: ${packingData.lineItems?.length || 0} items, PO: ${packingData.customerPO || 'N/A'}`)
+          }
+        } catch (e) {
+          console.error(`  ⚠️  Warehouse PDF parse error: ${e.message}`)
+        }
+
+        // Upload PDF to storage
+        let pdfUrl = null
+        try {
+          const storagePath = `runup-pdfs/warehouse/${Date.now()}_${whPdf.filename}`
+          const { error: upErr } = await supabase.storage
+            .from('job-documents')
+            .upload(storagePath, whPdf.content, { contentType: 'application/pdf', upsert: true })
+          if (!upErr) {
+            const { data: urlData } = supabase.storage.from('job-documents').getPublicUrl(storagePath)
+            pdfUrl = urlData.publicUrl
+            console.log(`  📎 Uploaded PDF: ${pdfUrl}`)
+          } else {
+            console.error(`  ⚠️  PDF upload error: ${upErr.message}`)
+          }
+        } catch (e) {
+          console.error(`  ⚠️  PDF upload error: ${e.message}`)
+        }
+
+        if (packingData) {
+          // Extract machine info from parsed packing list
+          const machines = (packingData.lineItems || []).filter(i =>
+            /ECOSYS|TASKalfa|LASER.*PRINT|COLOUR.*DIGITAL/i.test(i.description)
+          )
+          const machineModel = machines.map(i => {
+            const m = i.description.match(/(ECOSYS\s+\S+|TASKalfa\s+\S+)/i)
+            return m ? m[1] : i.description
+          }).join(' + ') || null
+
+          const serialNumber = (packingData.lineItems || [])
+            .flatMap(i => i.serialNumbers || []).filter(Boolean)[0] || null
+
+          const customerPO = packingData.customerPO || null
+          const connote = packingData.connote || null
+          const shipTo = packingData.shipTo || null
+
+          const jobNumber = customerPO ? `RUNUP-WH-${customerPO}` : `RUNUP-WH-${Date.now()}`
+
+          const noteLines = [
+            'Warehouse scan — run-up job',
+            `Shipment ID: ${packingData.shipmentId || 'N/A'}`,
+            `Customer PO: ${customerPO || 'N/A'}`,
+            `Ship Date: ${packingData.shipDate || 'N/A'}`,
+            `Connote: ${connote || 'N/A'}`,
+            shipTo ? `Ship To: ${shipTo}` : null,
+          ].filter(Boolean).join('\n')
+
+          const { data: newJob, error: jobErr } = await supabase.from('jobs').insert({
+            job_number: jobNumber,
+            job_type: 'runup',
+            status: 'new',
+            machine_model: machineModel,
+            serial_number: serialNumber,
+            po_number: customerPO,
+            tracking_number: connote,
+            address_to: shipTo,
+            install_pdf_url: pdfUrl,
+            notes: noteLines,
+            special_instructions: JSON.stringify(packingData),
+          }).select('id, job_number').single()
+
+          if (jobErr) {
+            console.error(`  ❌ Warehouse job create error: ${jobErr.message}`)
+          } else {
+            console.log(`  ✅ Created warehouse run-up job ${newJob.job_number}`)
+            await sendTelegram(
+              `🆕 <b>New Warehouse Run-Up — ${newJob.job_number}</b>\n` +
+              (machineModel ? `🖨 Machine: ${machineModel}\n` : '') +
+              (serialNumber ? `🔢 Serial: ${serialNumber}\n` : '') +
+              (shipTo ? `📍 Ship To: ${shipTo}\n` : '') +
+              (connote ? `📦 Connote: ${connote}\n` : '') +
+              `🔗 https://crm.honorremovals.com.au/jobs`
+            )
+          }
+        } else {
+          // Could not parse — create runup_pending job for manual review
+          const jobNumber = `RUNUP-WH-${Date.now()}`
+          const { data: newJob, error: jobErr } = await supabase.from('jobs').insert({
+            job_number: jobNumber,
+            job_type: 'runup',
+            status: 'runup_pending',
+            install_pdf_url: pdfUrl,
+            notes: 'Warehouse scan — manual review required',
+          }).select('id, job_number').single()
+
+          if (jobErr) {
+            console.error(`  ❌ Warehouse job create error: ${jobErr.message}`)
+          } else {
+            console.log(`  ✅ Created warehouse job ${newJob.job_number} (pending_review)`)
+            await sendTelegram(
+              `🆕 <b>New Warehouse Scan — ${newJob.job_number}</b>\n` +
+              `⚠️ Could not parse PDF — manual review required\n` +
+              `🔗 https://crm.honorremovals.com.au/jobs`
+            )
+          }
+        }
+
+        uidsToMark.push(uid)
+        continue
+      }
+      // Warehouse email but no PDF — skip
+      console.log(`  ℹ️  Warehouse email without PDF — skipping`)
+      uidsToMark.push(uid)
+      continue
+    }
 
     // ── Axus email handling ────────────────────────────────────────────────────
     const isAxusEmail = from.toLowerCase() === 'support@axusgroup.com.au'
