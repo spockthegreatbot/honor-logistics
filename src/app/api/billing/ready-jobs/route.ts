@@ -23,15 +23,14 @@ export async function GET(request: NextRequest) {
     .from('jobs')
     .select(`
       id, job_number, job_type, status, scheduled_date, created_at,
+      contact_name, contact_phone, address_to, address_from,
+      machine_model, machine_details, machine_accessories,
       serial_number, order_types, notes, client_reference,
-      client_id,
-      clients(id, name, color_code),
-      end_customers(id, name),
-      machines(id, model, make),
-      runup_details(unit_price),
-      install_details(unit_price),
-      delivery_details(base_price, fuel_surcharge_amt, fuel_override, subtype),
-      toner_orders(total_price)
+      special_instructions, pickup_model, pickup_serial,
+      po_number, tracking_number,
+      client_id, booking_form_url, install_pdf_url,
+      clients(id, name, color_code, billing_cycle_frequency),
+      end_customers(id, name)
     `)
     .eq('client_id', clientId)
     // Not already in a billing cycle
@@ -63,50 +62,38 @@ export async function GET(request: NextRequest) {
     .eq('financial_year', CURRENT_FY)
     .eq('is_active', true)
 
-  // Enrich jobs with auto-pricing
+  // Enrich jobs with auto-pricing from order_types mapped to pricing rules
   const enrichedJobs = (jobs ?? []).map((job) => {
     const jobType = job.job_type ?? ''
+    const orderTypes: string[] = Array.isArray(job.order_types)
+      ? job.order_types
+      : typeof job.order_types === 'string'
+        ? JSON.parse(job.order_types || '[]')
+        : []
     let autoPrice: number | null = null
     let autoPriceSource: string | null = null
 
-    // Try to get price from job's own detail tables first
-    const runupArr = Array.isArray(job.runup_details) ? job.runup_details : []
-    const installArr = Array.isArray(job.install_details) ? job.install_details : []
-    const deliveryArr = Array.isArray(job.delivery_details) ? job.delivery_details : []
-    const tonerArr = Array.isArray(job.toner_orders) ? job.toner_orders : []
-
-    if (jobType === 'runup' && runupArr.length > 0 && runupArr[0]?.unit_price) {
-      autoPrice = Number(runupArr[0].unit_price)
-      autoPriceSource = 'job_detail'
-    } else if (jobType === 'install' && installArr.length > 0 && installArr[0]?.unit_price) {
-      autoPrice = Number(installArr[0].unit_price)
-      autoPriceSource = 'job_detail'
-    } else if (['delivery', 'collection', 'inwards', 'outwards'].includes(jobType) && deliveryArr.length > 0 && deliveryArr[0]?.base_price) {
-      autoPrice = Number(deliveryArr[0].base_price)
-      autoPriceSource = 'job_detail'
-    } else if (jobType === 'toner_ship' && tonerArr.length > 0 && tonerArr[0]?.total_price) {
-      autoPrice = Number(tonerArr[0].total_price)
-      autoPriceSource = 'job_detail'
-    }
-
-    // Fallback to pricing rules if no job-level price
-    if (autoPrice === null && pricingRules) {
-      const matchingRule = pricingRules.find(
-        (rule) => rule.job_type === jobType
-      )
-      if (matchingRule) {
-        autoPrice = Number(matchingRule.unit_price)
-        autoPriceSource = 'pricing_rule'
+    // Match pricing rules by order_types first, then job_type
+    if (pricingRules) {
+      const typesToCheck = orderTypes.length > 0 ? orderTypes : [jobType]
+      for (const t of typesToCheck) {
+        const matchingRule = pricingRules.find(
+          (rule) => rule.job_type === t
+        )
+        if (matchingRule) {
+          // Sum prices if multiple order types
+          if (autoPrice === null) autoPrice = 0
+          autoPrice += Number(matchingRule.unit_price)
+          autoPriceSource = 'pricing_rule'
+        }
       }
     }
 
-    // Get fuel surcharge from delivery details
+    // Fuel surcharge: use a flat rate for delivery-type jobs
     let fuelSurcharge: number | null = null
-    if (['delivery', 'collection', 'inwards', 'outwards'].includes(jobType) && deliveryArr.length > 0) {
-      const detail = deliveryArr[0] as { fuel_override?: boolean; fuel_surcharge_amt?: number }
-      if (!detail.fuel_override && detail.fuel_surcharge_amt) {
-        fuelSurcharge = Number(detail.fuel_surcharge_amt)
-      }
+    if (['delivery', 'collection', 'inwards', 'outwards'].includes(jobType)) {
+      // Will be summed at the invoice level; individual items get 0
+      fuelSurcharge = 0
     }
 
     return {

@@ -6,6 +6,7 @@ interface ClientWithStats {
   id: string
   name: string
   color_code: string | null
+  billing_cycle_frequency: string | null
   ready_count: number
   last_cycle_end: string | null
 }
@@ -17,7 +18,7 @@ export default async function GenerateInvoicePage({ searchParams }: { searchPara
   // Get billing clients
   const { data: allClients } = await supabase
     .from('clients')
-    .select('id, name, color_code')
+    .select('id, name, color_code, billing_cycle_frequency')
     .order('name')
 
   const billingClients = (allClients ?? []).filter((c) =>
@@ -50,6 +51,7 @@ export default async function GenerateInvoicePage({ searchParams }: { searchPara
         id: client.id,
         name: client.name,
         color_code: client.color_code,
+        billing_cycle_frequency: client.billing_cycle_frequency ?? null,
         ready_count: readyCount ?? 0,
         last_cycle_end: lastCycle?.period_end ?? null,
       }

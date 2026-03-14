@@ -24,6 +24,7 @@ interface ClientWithStats {
   id: string
   name: string
   color_code: string | null
+  billing_cycle_frequency: string | null
   ready_count: number
   last_cycle_end: string | null
 }
@@ -35,12 +36,23 @@ interface JobRecord {
   status: string | null
   scheduled_date: string | null
   created_at: string | null
+  contact_name: string | null
+  contact_phone: string | null
+  address_to: string | null
+  address_from: string | null
+  machine_model: string | null
+  machine_details: string | null
+  machine_accessories: string | null
   serial_number: string | null
-  order_types: string | null
-  client_reference: string | null
+  order_types: string[] | string | null
   notes: string | null
+  client_reference: string | null
+  special_instructions: string | null
+  pickup_model: string | null
+  pickup_serial: string | null
+  po_number: string | null
+  tracking_number: string | null
   end_customers: { id: string; name: string } | null
-  machines: { id: string; model: string; make: string | null } | null
   auto_price: number | null
   auto_price_source: string | null
   fuel_surcharge: number | null
@@ -52,13 +64,17 @@ interface LineItem {
   selected: boolean
   date: string
   customer: string
-  action: string
+  description: string
   model: string
   serial: string
+  address: string
   qty: number
   price: number
   fuel: number
   sheet_type: string
+  isRunup: boolean
+  poNumber: string
+  connote: string
   isManual: boolean
 }
 
@@ -77,16 +93,43 @@ function todayStr() {
 function jobTypeLabel(t: string | null): string {
   const map: Record<string, string> = {
     runup: 'Run-Up', delivery: 'Delivery', collection: 'Collection',
-    install: 'Install', inwards: 'Inwards', outwards: 'Outwards',
+    install: 'Install', installation: 'Installation', inwards: 'Inwards',
+    outwards: 'Outwards', pickup: 'Pickup', relocation: 'Relocation',
     toner_ship: 'Toner', storage: 'Storage',
   }
-  return t ? (map[t] ?? t.replace(/_/g, ' ')) : '—'
+  return t ? (map[t] ?? t.charAt(0).toUpperCase() + t.slice(1).replace(/_/g, ' ')) : '—'
 }
 
 function sheetTypeFromJobType(jt: string | null): string {
   if (!jt) return 'misc'
   if (['delivery', 'collection', 'inwards', 'outwards'].includes(jt)) return 'inwards_outwards'
   return jt
+}
+
+function buildDescription(job: JobRecord): string {
+  const rawTypes: string[] = Array.isArray(job.order_types)
+    ? job.order_types
+    : typeof job.order_types === 'string' && job.order_types
+      ? (() => { try { return JSON.parse(job.order_types) } catch { return [job.order_types] } })()
+      : []
+  const types = rawTypes.length > 0 ? rawTypes : (job.job_type ? [job.job_type] : [])
+
+  const label = types.map((t: string) => jobTypeLabel(t)).join(' + ')
+
+  // For EFEX-style clients, add A3/A4 context based on machine model
+  if (job.machine_model) {
+    const isA3 = /KM|BH|C258|C250|C658|bhc/i.test(job.machine_model)
+    const isA4 = /HP|LaserJet|M4|SFP|E50|E40/i.test(job.machine_model)
+    if (isA3) return `${label} - A3`
+    if (isA4) return `${label} - A4 SFP`
+  }
+
+  return label || '—'
+}
+
+function truncateAddress(addr: string | null, max = 30): string {
+  if (!addr) return ''
+  return addr.length > max ? addr.slice(0, max) + '…' : addr
 }
 
 /* ── Component ─────────────────────────────────────────────── */
@@ -124,14 +167,18 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
         job_id: job.id,
         selected: true,
         date: job.scheduled_date ?? (job.created_at?.slice(0, 10) ?? ''),
-        customer: job.end_customers?.name ?? '',
-        action: job.order_types ?? jobTypeLabel(job.job_type),
-        model: job.machines?.model ?? '',
-        serial: job.serial_number ?? '',
+        customer: job.contact_name || job.end_customers?.name || '—',
+        description: buildDescription(job),
+        model: job.machine_model || '',
+        serial: job.serial_number || '',
+        address: job.address_to || '',
         qty: 1,
         price: job.auto_price ?? 0,
         fuel: job.fuel_surcharge ?? 0,
         sheet_type: sheetTypeFromJobType(job.job_type),
+        isRunup: job.job_type === 'runup',
+        poNumber: job.po_number || '',
+        connote: job.tracking_number || '',
         isManual: false,
       }))
 
@@ -145,10 +192,24 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
 
   function handleSelectClient(client: ClientWithStats) {
     setSelectedClient(client)
-    const from = client.last_cycle_end
-      ? addDays(client.last_cycle_end, 1)
-      : '2024-07-01'
+
+    let from: string
     const to = todayStr()
+
+    if (client.last_cycle_end) {
+      // Continue from day after last cycle
+      from = addDays(client.last_cycle_end, 1)
+    } else if (client.billing_cycle_frequency === 'biweekly') {
+      // Default: last 2 weeks
+      const d = new Date()
+      d.setDate(d.getDate() - 14)
+      from = d.toISOString().slice(0, 10)
+    } else {
+      // Monthly: first of current month
+      const d = new Date()
+      from = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10)
+    }
+
     setPeriodStart(from)
     setPeriodEnd(to)
     setCycleName('')
@@ -223,13 +284,17 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
         selected: true,
         date: todayStr(),
         customer: '',
-        action: '',
+        description: '',
         model: '',
         serial: '',
+        address: '',
         qty: 1,
         price: 0,
         fuel: 0,
         sheet_type: 'misc',
+        isRunup: false,
+        poNumber: '',
+        connote: '',
         isManual: true,
       },
     ])
@@ -266,7 +331,7 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
         fuel_surcharge_total: fuelTotal,
         line_items: selected.map((item) => ({
           job_id: item.job_id,
-          description: item.action,
+          description: item.description,
           qty: item.qty,
           price_ex: item.price,
           fuel_surcharge: item.fuel,
@@ -274,8 +339,12 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
           customer: item.customer,
           model: item.model,
           serial: item.serial,
-          action: item.action,
+          address: item.address,
+          action: item.description,
           job_date: item.date,
+          is_runup: item.isRunup,
+          po_number: item.poNumber,
+          connote: item.connote,
         })),
       }
 
@@ -506,10 +575,11 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
                       onCheckedChange={toggleAll}
                     />
                   </TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead className="w-20">Date</TableHead>
                   <TableHead>Customer</TableHead>
-                  <TableHead>Action / Type</TableHead>
-                  <TableHead className="hidden md:table-cell">Model</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="hidden md:table-cell">Machine</TableHead>
+                  <TableHead className="hidden lg:table-cell">Address</TableHead>
                   <TableHead className="w-16 text-center">Qty</TableHead>
                   <TableHead className="w-28 text-right">Price (ex GST)</TableHead>
                   <TableHead className="w-24 text-right">Total</TableHead>
@@ -519,7 +589,7 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
               <TableBody>
                 {lineItems.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-[#64748b]">
+                    <TableCell colSpan={10} className="text-center py-8 text-[#64748b]">
                       No jobs found for this period. Try adjusting the date range.
                     </TableCell>
                   </TableRow>
@@ -565,16 +635,24 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
                     <TableCell className="text-[#f1f5f9] text-sm">
                       {item.isManual ? (
                         <Input
-                          value={item.action}
-                          onChange={(e) => updateItem(item.key, 'action', e.target.value)}
+                          value={item.description}
+                          onChange={(e) => updateItem(item.key, 'description', e.target.value)}
                           placeholder="Description"
                           className="h-7 text-xs min-w-[140px]"
                         />
                       ) : (
-                        item.action
+                        <div>
+                          <span>{item.description}</span>
+                          {item.isRunup && item.poNumber && (
+                            <span className="block text-[10px] text-[#64748b]">PO: {item.poNumber}</span>
+                          )}
+                          {item.isRunup && item.connote && (
+                            <span className="block text-[10px] text-[#64748b]">CN: {item.connote}</span>
+                          )}
+                        </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm hidden md:table-cell">
+                    <TableCell className="text-sm hidden md:table-cell" title={item.serial ? `S/N: ${item.serial}` : undefined}>
                       {item.isManual ? (
                         <Input
                           value={item.model}
@@ -583,7 +661,19 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
                           className="h-7 text-xs min-w-[100px]"
                         />
                       ) : (
-                        item.model || '—'
+                        <span className="cursor-default">{item.model || '—'}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm hidden lg:table-cell" title={item.address || undefined}>
+                      {item.isManual ? (
+                        <Input
+                          value={item.address}
+                          onChange={(e) => updateItem(item.key, 'address', e.target.value)}
+                          placeholder="Address"
+                          className="h-7 text-xs min-w-[120px]"
+                        />
+                      ) : (
+                        <span className="text-[#94a3b8] text-xs">{truncateAddress(item.address)}</span>
                       )}
                     </TableCell>
                     <TableCell className="text-center">
