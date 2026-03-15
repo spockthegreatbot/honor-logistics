@@ -68,6 +68,7 @@ interface LineItem {
   model: string
   serial: string
   address: string
+  accessories: string
   qty: number
   price: number
   fuel: number
@@ -106,6 +107,45 @@ function sheetTypeFromJobType(jt: string | null): string {
   return jt
 }
 
+function enrichRunupJobFromSpecialInstructions(job: JobRecord): void {
+  if (job.job_type !== 'runup' || job.machine_model || !job.special_instructions) return
+  try {
+    const si = typeof job.special_instructions === 'string'
+      ? JSON.parse(job.special_instructions)
+      : job.special_instructions
+
+    // Extract from packing list lineItems format
+    if (si.lineItems && Array.isArray(si.lineItems)) {
+      const machines = si.lineItems.filter((i: { description?: string }) =>
+        /ECOSYS|TASKalfa|LASER|COLOUR|APEOS/i.test(i.description ?? '')
+      )
+      if (machines.length > 0) {
+        job.machine_model = machines.map((i: { description?: string }) => {
+          const m = (i.description ?? '').match(/(ECOSYS\s+\S+|TASKalfa\s+\S+|APEOS\s+\S+)/i)
+          return m ? m[1] : i.description
+        }).join(' + ') || null
+      }
+
+      const serials = si.lineItems.flatMap((i: { serialNumbers?: string[] }) => i.serialNumbers || []).filter(Boolean)
+      if (serials.length > 0 && !job.serial_number) {
+        job.serial_number = serials[0]
+      }
+    }
+
+    // Extract from flat fields (delivery docket, EFEX AOD, etc.)
+    if (!job.machine_model && si.model) {
+      const m = si.model.match(/(ECOSYS\s+\S+|TASKalfa\s+\S+|APEOS\s+\S+|HP\s+LASERJET\s+\S+\s+\S+|KM[\s_]\S+)/i)
+      job.machine_model = m ? m[1] : si.model
+    }
+    if (!job.serial_number && si.serial) job.serial_number = si.serial
+
+    job.po_number = job.po_number || si.customerPO || si.yourRef || null
+    job.tracking_number = job.tracking_number || si.connote || null
+    job.address_to = job.address_to || si.shipTo || si.location || null
+    job.contact_name = job.contact_name || si.customerName || null
+  } catch { /* ignore parse errors */ }
+}
+
 function buildDescription(job: JobRecord): string {
   const rawTypes: string[] = Array.isArray(job.order_types)
     ? job.order_types
@@ -115,6 +155,12 @@ function buildDescription(job: JobRecord): string {
   const types = rawTypes.length > 0 ? rawTypes : (job.job_type ? [job.job_type] : [])
 
   const label = types.map((t: string) => jobTypeLabel(t)).join(' + ')
+
+  // Run-up jobs: show model name for specificity
+  if (job.job_type === 'runup') {
+    if (job.machine_model) return `Run-Up - ${job.machine_model}`
+    return 'Run-Up'
+  }
 
   // For EFEX-style clients, add A3/A4 context based on machine model
   if (job.machine_model) {
@@ -162,25 +208,31 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to fetch jobs')
 
-      const items: LineItem[] = (json.jobs ?? []).map((job: JobRecord, idx: number) => ({
-        key: `job-${job.id}-${idx}`,
-        job_id: job.id,
-        selected: true,
-        date: job.scheduled_date ?? (job.created_at?.slice(0, 10) ?? ''),
-        customer: job.contact_name || job.end_customers?.name || '—',
-        description: buildDescription(job),
-        model: job.machine_model || '',
-        serial: job.serial_number || '',
-        address: job.address_to || '',
-        qty: 1,
-        price: job.auto_price ?? 0,
-        fuel: job.fuel_surcharge ?? 0,
-        sheet_type: sheetTypeFromJobType(job.job_type),
-        isRunup: job.job_type === 'runup',
-        poNumber: job.po_number || '',
-        connote: job.tracking_number || '',
-        isManual: false,
-      }))
+      const items: LineItem[] = (json.jobs ?? []).map((job: JobRecord, idx: number) => {
+        // Enrich run-up jobs from special_instructions if main fields are empty
+        enrichRunupJobFromSpecialInstructions(job)
+        
+        return {
+          key: `job-${job.id}-${idx}`,
+          job_id: job.id,
+          selected: true,
+          date: job.scheduled_date ?? (job.created_at?.slice(0, 10) ?? ''),
+          customer: job.contact_name || job.end_customers?.name || '—',
+          description: buildDescription(job),
+          model: job.machine_model || '',
+          serial: job.serial_number || '',
+          address: job.address_to || '',
+          accessories: job.machine_accessories || '',
+          qty: 1,
+          price: job.auto_price ?? 0,
+          fuel: job.fuel_surcharge ?? 0,
+          sheet_type: sheetTypeFromJobType(job.job_type),
+          isRunup: job.job_type === 'runup',
+          poNumber: job.po_number || '',
+          connote: job.tracking_number || '',
+          isManual: false,
+        }
+      })
 
       setLineItems(items)
     } catch (err) {
@@ -288,6 +340,7 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
         model: '',
         serial: '',
         address: '',
+        accessories: '',
         qty: 1,
         price: 0,
         fuel: 0,
@@ -661,7 +714,15 @@ export default function InvoiceBuilder({ clients, initialClientId, initialJobIds
                           className="h-7 text-xs min-w-[100px]"
                         />
                       ) : (
-                        <span className="cursor-default">{item.model || '—'}</span>
+                        <div>
+                          <span className="cursor-default">{item.model || '—'}</span>
+                          {item.serial && (
+                            <span className="block text-[10px] text-[#64748b]">S/N: {item.serial}</span>
+                          )}
+                          {item.accessories && (
+                            <span className="block text-[10px] text-[#818cf8]">{item.accessories}</span>
+                          )}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="text-sm hidden lg:table-cell" title={item.address || undefined}>

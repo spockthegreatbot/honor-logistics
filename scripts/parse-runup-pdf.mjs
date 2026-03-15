@@ -11,31 +11,255 @@
 
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
-const { PDFParse } = require('pdf-parse')
 
 /**
  * Parse a Kyocera packing list PDF buffer into structured data.
+ * Uses pdf-parse for text extraction. If text is too short (scanned image PDF),
+ * returns a result with extractionFailed=true so callers can handle it.
+ *
  * @param {Buffer} pdfBuffer
  * @returns {Promise<Object>} Parsed packing list data
  */
 export async function parsePackingListPdf(pdfBuffer) {
-  const parser = new PDFParse()
-  const result = await parser.loadPDF(pdfBuffer)
+  let fullText = ''
   
-  // Get text from all pages
-  const pages = []
-  for (let i = 0; i < result.numPages; i++) {
-    const page = await result.getPage(i + 1)
-    const textContent = await page.getTextContent()
-    const text = textContent.items.map(item => item.str).join(' ')
-    pages.push(text)
+  try {
+    const pdfParse = require('pdf-parse')
+    const data = await pdfParse(pdfBuffer)
+    fullText = data.text || ''
+    console.log('PDF text length:', fullText.length, 'Preview:', fullText.slice(0, 200).replace(/\n/g, ' '))
+  } catch (err) {
+    console.error('pdf-parse failed:', err.message)
   }
-  
-  const fullText = pages.join('\n')
-  return parsePackingListText(fullText)
+
+  // If text extraction returned very little, the PDF is likely a scanned image
+  if (fullText.length < 50) {
+    console.warn('PDF text too short — likely a scanned image. Manual review or OCR required.')
+    const result = parsePackingListText(fullText)
+    result.extractionFailed = true
+    result.rawTextLength = fullText.length
+    return result
+  }
+
+  const result = parsePackingListText(fullText)
+  result.extractionFailed = false
+  result.rawTextLength = fullText.length
+  return result
 }
 
 /**
+ * Detect document type from extracted text and route to appropriate parser.
+ */
+export function detectAndParse(text) {
+  // Detect delivery docket format (Evolved Digital, Mitronics, etc.)
+  if (/DELIVERY DOCKET/i.test(text) || /Acceptance of Delivery/i.test(text)) {
+    return parseDeliveryDocket(text)
+  }
+  // Detect meter count / status page (not a packing list)
+  if (/Meter Count List/i.test(text) || /Status Page\s*\n\s*MFP/i.test(text)) {
+    return parseMeterCountPage(text)
+  }
+  // Detect EFEX acknowledgement of delivery
+  if (/ACKNOWLEDGEMENT OF DELIVERY/i.test(text) || /efex/i.test(text)) {
+    return parseEfexAoD(text)
+  }
+  // Default: Kyocera packing list format
+  return parsePackingListText(text)
+}
+
+/**
+ * Parse delivery docket format (Evolved Digital, Mitronics, etc.)
+ */
+function parseDeliveryDocket(text) {
+  const result = {
+    documentType: 'delivery_docket',
+    shipDate: null,
+    shipmentId: null,
+    customerPO: null,
+    connote: null,
+    shipFrom: null,
+    shipTo: null,
+    specialInstructions: null,
+    lineItems: [],
+    pageCount: null,
+    primaryMachine: null,
+    machines: [],
+    accessories: [],
+  }
+
+  // Date
+  const dateMatch = text.match(/Date:\s*(\d{1,2}[-–\/]\w{3}[-–\/]\d{2,4})/i)
+  if (dateMatch) result.shipDate = dateMatch[1]
+
+  // Reference numbers
+  const yourRefMatch = text.match(/Your\s*Ref:\s*(\S+)/i)
+  if (yourRefMatch) result.customerPO = yourRefMatch[1]
+  const ourRefMatch = text.match(/Our\s*Ref:\s*(\S+)/i)
+  if (ourRefMatch) result.shipmentId = ourRefMatch[1]
+
+  // Carrier / connote
+  const carrierMatch = text.match(/Carrier:\s*(\S+)/i)
+  if (carrierMatch) result.connote = carrierMatch[1]
+
+  // Ship From (first address block)
+  const fromMatch = text.match(/^([A-Z][A-Z\s&]+(?:PTY LTD|LTD|INC)?)\n([A-Z0-9].*?\n.*?NSW\s+\d{4})/im)
+  if (fromMatch) result.shipFrom = `${fromMatch[1].trim()}, ${fromMatch[2].replace(/\n/g, ', ').trim()}`
+
+  // Deliver To
+  const deliverToMatch = text.match(/Deliver\s*To:\s*\n?([\s\S]*?)(?=Ph:|Fax:|$)/i)
+  if (deliverToMatch) result.shipTo = deliverToMatch[1].replace(/\n/g, ', ').replace(/\s+/g, ' ').trim()
+
+  // Ship To (Mitronics format)
+  const shipToMatch = text.match(/Ship\s*To\s*\n?Ship:\s*([\s\S]*?)(?=Tel:|Fax:|Via:|Ship Ref:)/i)
+  if (shipToMatch && !result.shipTo) result.shipTo = shipToMatch[1].replace(/\n/g, ', ').replace(/\s+/g, ' ').trim()
+
+  // Customer name from Ship To (Mitronics) or item description
+  const customerInItem = text.match(/(?:Item Description[\s\S]*?)\n([A-Z][A-Za-z\s&]+(?:Pty Ltd|PTY LTD))/i)
+  
+  // Machine model and serial from item description
+  const modelMatch = text.match(/(APEOS\s+\S+|HP\s+LASERJET\s+\S+\s+\S+|ECOSYS\s+\S+|TASKalfa\s+\S+|KM[\s_]\S+)/i)
+  const serialMatch = text.match(/Serial\s*#?:?\s*(\S+)/i)
+
+  if (modelMatch) {
+    const item = {
+      itemCode: '',
+      description: modelMatch[0].trim(),
+      orderedQty: 1,
+      shippedQty: 1,
+      serialNumbers: serialMatch ? [serialMatch[1]] : [],
+    }
+    result.lineItems.push(item)
+    result.machines.push(item)
+    result.primaryMachine = item
+  }
+
+  // Instructions (Mitronics format)
+  const instrMatch = text.match(/Instructions:\s*(.*)/i)
+  if (instrMatch) result.specialInstructions = instrMatch[1].trim()
+
+  // Contact 
+  const contactMatch = text.match(/Contact:\s*(.*)/i)
+  if (contactMatch) result.contactName = contactMatch[1].trim()
+
+  // Customer name from item description line or Attn field
+  const attnMatch = text.match(/Attn:\s*(.*?)(?:\s{2,}|$)/i)
+  if (customerInItem) result.customerName = customerInItem[1].trim()
+  if (attnMatch && !result.customerName) result.customerName = attnMatch[1].trim()
+  
+  // Job number from Mitronics format
+  const jobMatch = text.match(/Job#\s*(\d+)/i)
+  if (jobMatch) result.externalJobNumber = jobMatch[1]
+
+  return result
+}
+
+/**
+ * Parse EFEX Acknowledgement of Delivery
+ */
+function parseEfexAoD(text) {
+  const result = {
+    documentType: 'efex_aod',
+    shipDate: null,
+    shipmentId: null,
+    customerPO: null,
+    connote: null,
+    shipFrom: null,
+    shipTo: null,
+    specialInstructions: null,
+    lineItems: [],
+    pageCount: null,
+    primaryMachine: null,
+    machines: [],
+    accessories: [],
+  }
+
+  // Customer name
+  const nameMatch = text.match(/Name:\s*(.*?)(?:\n|$)/i)
+  if (nameMatch) result.customerName = nameMatch[1].trim()
+
+  // Equipment table
+  const modelMatch = text.match(/(Kyocera\s+\S+\s+\S+|TASKalfa\s+\S+|ECOSYS\s+\S+)/i)
+  const serialMatch = text.match(/Serial\/Identifier\s*No\(?s?\)?\s*\n?.*?([A-Z0-9]{6,})/i)
+    || text.match(/\|\s*([A-Z0-9]{6,})\s*\|/i)
+  const locationMatch = text.match(/Location\s*\n?.*?(\d+\s+[A-Za-z].*?(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\s+\d{4})/i)
+
+  if (modelMatch) {
+    const item = {
+      itemCode: '',
+      description: modelMatch[0].trim(),
+      orderedQty: 1,
+      shippedQty: 1,
+      serialNumbers: serialMatch ? [serialMatch[1]] : [],
+    }
+    result.lineItems.push(item)
+    result.machines.push(item)
+    result.primaryMachine = item
+  }
+
+  if (locationMatch) result.shipTo = locationMatch[1].trim()
+
+  // Date from signature section
+  const dateMatch = text.match(/Date:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i)
+  if (dateMatch) result.shipDate = dateMatch[1]
+
+  return result
+}
+
+/**
+ * Parse meter count / status page — extract machine model and serial at minimum
+ */
+function parseMeterCountPage(text) {
+  const result = {
+    documentType: 'meter_count',
+    shipDate: null,
+    shipmentId: null,
+    customerPO: null,
+    connote: null,
+    shipFrom: null,
+    shipTo: null,
+    specialInstructions: null,
+    lineItems: [],
+    pageCount: null,
+    primaryMachine: null,
+    machines: [],
+    accessories: [],
+  }
+
+  // Device name / model
+  const deviceMatch = text.match(/Device\s*Name\s*:?\s*(\S+)/i)
+    || text.match(/^MFP\s*\n\s*(TASKalfa\s+\S+|ECOSYS\s+\S+|KM[\s_]\S+)/im)
+  
+  // Serial from header
+  const serialMatch = text.match(/Serial\s*No\.?\s*:?\s*([A-Z0-9]{6,})/i)
+
+  // Date
+  const dateMatch = text.match(/(\d{1,2}\/\d{1,2}\/\d{4})/i)
+  if (dateMatch) result.shipDate = dateMatch[1]
+
+  if (deviceMatch) {
+    const item = {
+      itemCode: '',
+      description: deviceMatch[1].trim(),
+      orderedQty: 1,
+      shippedQty: 1,
+      serialNumbers: serialMatch ? [serialMatch[1]] : [],
+    }
+    result.lineItems.push(item)
+    result.machines.push(item)
+    result.primaryMachine = item
+  }
+
+  // Customer name from handwritten note or device name
+  const customerMatch = text.match(/Device\s*Name\s*:?\s*(.*?)(?:\n|$)/i)
+  if (customerMatch && !/^(KM|TASKalfa|ECOSYS)/i.test(customerMatch[1])) {
+    result.customerName = customerMatch[1].trim()
+  }
+
+  return result
+}
+
+/**
+ * Parse Kyocera packing list text format.
  * Alternative: parse from pre-extracted text (when using pdf tool or other extractor)
  */
 export function parsePackingListText(text) {

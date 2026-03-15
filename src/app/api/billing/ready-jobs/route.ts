@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     .select(`
       id, job_number, job_type, status, scheduled_date, created_at,
       contact_name, contact_phone, address_to, address_from,
-      machine_model,
+      machine_model, machine_accessories,
       serial_number, order_types, notes, client_reference,
       special_instructions, pickup_model, pickup_serial,
       po_number, tracking_number,
